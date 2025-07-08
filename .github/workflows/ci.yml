@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        deno-version: [v1.x]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: ${{ matrix.deno-version }}
+
+      - name: Verify project structure
+        run: |
+          echo "Project structure:"
+          find . -type f -name "*.ts" -o -name "*.json" -o -name "*.md" | head -20
+        shell: bash
+
+      - name: Type check
+        run: deno check mod.ts
+
+      - name: Run tests
+        run: deno task test
+
+      - name: Format check
+        run: deno fmt --check
+
+      - name: Lint check
+        run: deno lint
+
+      - name: Test JSR publish (dry run)
+        run: deno publish --dry-run
+
+  compatibility:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        deno-version: [v1.40.x, v1.41.x, v1.42.x, v1.x]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Deno ${{ matrix.deno-version }}
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: ${{ matrix.deno-version }}
+
+      - name: Type check
+        run: deno check mod.ts
+
+      - name: Run basic functionality test
+        run: |
+          # Test that the module can be imported and basic functionality works
+          deno eval "
+          import { CLIParser } from './mod.ts';
+          const config = CLIParser.parse(['--help']);
+          console.log('✅ Module loads and basic functionality works');
+          "

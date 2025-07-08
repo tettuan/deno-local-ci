@@ -1,0 +1,81 @@
+{
+  "name": "@aidevtool/ci",
+  "version": "0.1.0",
+  "description": "TypeScript-based CI runner for Deno projects with comprehensive testing, formatting, and linting capabilities",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aidevtool/deno-local-ci.git"
+  },
+  "bugs": {
+    "url": "https://github.com/aidevtool/deno-local-ci/issues"
+  },
+  "homepage": "https://github.com/aidevtool/deno-local-ci#readme",
+  "author": "aidevtool",
+  "imports": {
+    "@std/path": "jsr:@std/path@^1.0.0"
+  },
+  "exports": {
+    ".": "./mod.ts",
+    "./ci-runner": "./src/ci_runner.ts",
+    "./logger": "./src/logger.ts",
+    "./cli-parser": "./src/cli_parser.ts",
+    "./process-runner": "./src/process_runner.ts",
+    "./file-system": "./src/file_system.ts",
+    "./types": "./src/types.ts"
+  },
+  "publish": {
+    "exclude": [
+      ".git/",
+      ".vscode/",
+      "*.test.ts",
+      "test_data/",
+      "examples/"
+    ]
+  },
+  "keywords": [
+    "ci",
+    "testing",
+    "deno",
+    "typescript",
+    "automation",
+    "lint",
+    "format",
+    "continuous-integration"
+  ],
+  "tasks": {
+    "dev": "deno run --allow-read --allow-write --allow-run --allow-env local_ci.ts",
+    "test": "deno test --allow-read --allow-write --allow-run --allow-env",
+    "fmt": "deno fmt",
+    "lint": "deno lint",
+    "check": "deno check mod.ts",
+    "ci": "deno task check && deno task test && deno task fmt --check && deno task lint",
+    "publish": "deno publish"
+  },
+  "fmt": {
+    "files": {
+      "include": ["src/", "*.ts", "*.md"]
+    },
+    "options": {
+      "useTabs": false,
+      "lineWidth": 100,
+      "indentWidth": 2,
+      "singleQuote": false
+    }
+  },
+  "lint": {
+    "files": {
+      "include": ["src/", "*.ts"]
+    },
+    "rules": {
+      "tags": ["recommended"]
+    }
+  },
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  }
+}

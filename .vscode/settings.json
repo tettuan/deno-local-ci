@@ -1,0 +1,7 @@
+{
+  "deno.enable": true,
+  // GitHub Copilot Agent Mode 有効化
+  "chat.agent.enabled": true,
+	// 自動実行モード (YOLO モード)
+	"chat.tools.autoApprove": true
+}
