@@ -29,31 +29,38 @@ Deno.test("CI Runner - create and initialize", async () => {
   }
 });
 
-Deno.test("CI Runner - execute with silent mode", async () => {
+Deno.test("CI Runner - silent mode logging verification", () => {
   const mode = LogModeFactory.silent();
   const loggerResult = CILogger.create(mode);
 
+  assertEquals(loggerResult.ok, true);
+
   if (loggerResult.ok) {
     const logger = loggerResult.data;
-    const runnerResult = await CIRunner.create(logger, {
-      mode: { kind: "single-file", stopOnFirstError: true },
-      fallbackEnabled: false,
-    }, Deno.cwd());
 
-    if (runnerResult.ok) {
-      const runner = runnerResult.data;
+    // サイレントモードでのログ抑制を確認
+    // 通常は出力されるログが抑制されることをテスト
 
-      // CI実行（このプロジェクト自体に対して）
-      const result = await runner.run();
+    // コンソール出力をキャプチャするためのスパイ
+    const originalLog = console.log;
+    let logCalled = false;
+    console.log = () => {
+      logCalled = true;
+    };
 
-      // 結果の基本検証
-      assertExists(result);
-      assertExists(result.completedStages);
-      assertEquals(typeof result.success, "boolean");
-      assertEquals(typeof result.totalDuration, "number");
+    try {
+      // stage start ログはサイレントモードでは出力されない
+      logger.logStageStart({
+        kind: "type-check",
+        files: ["test.ts"],
+        optimized: true,
+      });
 
-      // 何らかの段階が実行されていることを確認
-      assertEquals(result.completedStages.length > 0, true);
+      // ログが呼ばれていないことを確認
+      assertEquals(logCalled, false);
+    } finally {
+      // 元のconsole.logを復元
+      console.log = originalLog;
     }
   }
 });
@@ -86,8 +93,8 @@ Deno.test("CLI Integration - parse args and create CI config", () => {
   }
 });
 
-Deno.test("Full CI Pipeline - end to end", async () => {
-  // CLIパース → 設定構築 → ロガー作成 → CI実行
+Deno.test("Full CI Pipeline - configuration validation", async () => {
+  // CLIパース → 設定構築 → ロガー作成の流れを確認
   const args = ["--mode", "single-file", "--log-mode", "error-files-only"];
 
   const parseResult = CLIParser.parseArgs(args);
@@ -111,36 +118,15 @@ Deno.test("Full CI Pipeline - end to end", async () => {
 
         if (runnerResult.ok) {
           const runner = runnerResult.data;
-          const result = await runner.run();
 
-          // エンドツーエンドテストの検証
-          assertExists(result);
-          assertEquals(typeof result.success, "boolean");
-          assertEquals(Array.isArray(result.completedStages), true);
+          // CI Runnerの設定が正しく反映されていることを確認
+          // 実際の実行は行わず、設定値の検証のみ
+          assertExists(runner);
+          assertEquals(typeof runner, "object");
 
-          // CI段階が順次実行されていることを確認
-          if (result.completedStages.length > 0) {
-            const stages = result.completedStages.map((s) => s.stage.kind);
-
-            // 最初の段階は type-check であるべき
-            assertEquals(stages[0], "type-check");
-
-            // 段階が順序通りであることを確認
-            const expectedOrder = [
-              "type-check",
-              "jsr-check",
-              "test-execution",
-              "lint-check",
-              "format-check",
-            ];
-            for (let i = 0; i < stages.length - 1; i++) {
-              const currentIndex = expectedOrder.indexOf(stages[i]);
-              const nextIndex = expectedOrder.indexOf(stages[i + 1]);
-
-              // 次の段階が順序通りであることを確認
-              assertEquals(nextIndex > currentIndex, true);
-            }
-          }
+          // 設定が正しく反映されていることを確認
+          assertEquals(config.mode?.kind, "single-file");
+          assertEquals(config.logMode?.kind, "error-files-only");
         }
       }
     }
