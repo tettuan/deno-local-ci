@@ -5,6 +5,7 @@
  * 段階的ログレベルとエラーファイル表示
  */
 
+import { BreakdownLogger, LogLevel } from "@tettuan/breakdownlogger";
 import {
   BreakdownLoggerEnvConfig,
   CIError,
@@ -20,10 +21,17 @@ import {
  * CI専用ロガー
  */
 export class CILogger {
+  private readonly breakdownLogger?: BreakdownLogger;
+
   private constructor(
     private readonly mode: LogMode,
     private readonly breakdownConfig?: BreakdownLoggerEnvConfig,
-  ) {}
+  ) {
+    // DebugモードでBreakdownLoggerインスタンスを作成
+    if (mode.kind === "debug" && breakdownConfig) {
+      this.breakdownLogger = new BreakdownLogger();
+    }
+  }
 
   static create(
     mode: LogMode,
@@ -48,6 +56,11 @@ export class CILogger {
   setupBreakdownLogger(): void {
     if (this.mode.kind === "debug" && this.breakdownConfig) {
       this.breakdownConfig.setEnvironmentVariables();
+
+      // BreakdownLoggerのログレベルを設定
+      if (this.breakdownLogger) {
+        this.breakdownLogger.setLogLevel(LogLevel.DEBUG);
+      }
     }
   }
 
@@ -157,9 +170,18 @@ export class CILogger {
   logDebug(message: string, data?: unknown): void {
     if (this.mode.kind !== "debug") return;
 
-    console.log(`[DEBUG] ${message}`);
-    if (data) {
-      console.log(JSON.stringify(data, null, 2));
+    if (this.breakdownLogger) {
+      // BreakdownLoggerを使用したデバッグログ
+      this.breakdownLogger.debug(message);
+      if (data) {
+        this.breakdownLogger.debug(JSON.stringify(data, null, 2));
+      }
+    } else {
+      // フォールバック: 標準コンソール出力
+      console.log(`[DEBUG] ${message}`);
+      if (data) {
+        console.log(JSON.stringify(data, null, 2));
+      }
     }
   }
 
@@ -169,16 +191,27 @@ export class CILogger {
   logWarning(message: string): void {
     if (this.mode.kind === "error-files-only") return;
 
-    console.log(`WARNING: ${message}`);
+    if (this.breakdownLogger) {
+      this.breakdownLogger.warn(message);
+    } else {
+      console.log(`WARNING: ${message}`);
+    }
   }
 
   /**
    * エラーログ
    */
   logError(message: string, error?: unknown): void {
-    console.error(`ERROR: ${message}`);
-    if (error && this.mode.kind === "debug") {
-      console.error(error);
+    if (this.breakdownLogger) {
+      this.breakdownLogger.error(message);
+      if (error && this.mode.kind === "debug") {
+        this.breakdownLogger.error(String(error));
+      }
+    } else {
+      console.error(`ERROR: ${message}`);
+      if (error && this.mode.kind === "debug") {
+        console.error(error);
+      }
     }
   }
 

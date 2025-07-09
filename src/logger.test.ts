@@ -255,3 +255,48 @@ Deno.test("CILogger - log warning and error", () => {
     logger.logError("Error with details", new Error("Detailed error info"));
   }
 });
+
+Deno.test("CILogger - BreakdownLogger integration", () => {
+  const breakdownConfigResult = BreakdownLoggerEnvConfig.create("L", "CI_BREAKDOWN_TEST");
+
+  if (breakdownConfigResult.ok) {
+    const mode = LogModeFactory.debug(breakdownConfigResult.data);
+    const loggerResult = CILogger.create(mode, breakdownConfigResult.data);
+
+    if (loggerResult.ok) {
+      const logger = loggerResult.data;
+
+      // 環境変数設定前の保存
+      const originalLogLength = Deno.env.get("LOG_LENGTH");
+      const originalLogKey = Deno.env.get("LOG_KEY");
+
+      try {
+        // BreakdownLogger環境変数設定
+        logger.setupBreakdownLogger();
+
+        // 設定確認
+        assertEquals(Deno.env.get("LOG_LENGTH"), "L");
+        assertEquals(Deno.env.get("LOG_KEY"), "CI_BREAKDOWN_TEST");
+
+        // BreakdownLoggerを使用したログテスト
+        // 出力は実際にBreakdownLoggerによってタイムスタンプ付きで表示される
+        logger.logDebug("BreakdownLogger integration test");
+        logger.logWarning("BreakdownLogger warning test");
+        logger.logError("BreakdownLogger error test");
+      } finally {
+        // クリーンアップ（元の状態に復元）
+        if (originalLogLength) {
+          Deno.env.set("LOG_LENGTH", originalLogLength);
+        } else {
+          Deno.env.delete("LOG_LENGTH");
+        }
+
+        if (originalLogKey) {
+          Deno.env.set("LOG_KEY", originalLogKey);
+        } else {
+          Deno.env.delete("LOG_KEY");
+        }
+      }
+    }
+  }
+});

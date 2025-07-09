@@ -13,7 +13,8 @@
   "homepage": "https://github.com/aidevtool/deno-local-ci#readme",
   "author": "aidevtool",
   "imports": {
-    "@std/path": "jsr:@std/path@^1.0.0"
+    "@std/path": "jsr:@std/path@^1.0.0",
+    "@tettuan/breakdownlogger": "jsr:@tettuan/breakdownlogger@^0.1.10"
   },
   "exports": {
     ".": "./mod.ts",
