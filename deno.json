@@ -1,7 +1,7 @@
 {
   "name": "@aidevtool/ci",
   "version": "0.0.1",
-  "description": "A comprehensive TypeScript-based CI runner for Deno projects with robust testing, formatting, linting, and type checking capabilities. Built with Domain-Driven Design principles and strong type safety.",
+  "description": "Modern TypeScript CI/CD runner for Deno v2.x with automated testing, formatting, linting, type checking, and JSR publishing. Features domain-driven design, robust error handling, batch processing, and comprehensive logging for efficient local development and GitHub Actions integration.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -38,18 +38,25 @@
   "keywords": [
     "ci",
     "continuous-integration",
+    "cicd",
     "testing",
     "deno",
+    "deno2",
     "typescript",
     "automation",
     "lint",
     "format",
     "type-check",
+    "jsr",
     "jsr-compatible",
+    "github-actions",
+    "local-development",
     "domain-driven-design",
     "pipeline",
     "batch-processing",
-    "error-handling"
+    "error-handling",
+    "workflow",
+    "build-tools"
   ],
   "tasks": {
     "dev": "deno run --allow-read --allow-write --allow-run --allow-env local_ci.ts",
