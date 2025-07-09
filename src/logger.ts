@@ -15,7 +15,7 @@
  * @module
  */
 
-import { BreakdownLogger, LogLevel } from "@tettuan/breakdownlogger";
+import { BreakdownLogger } from "@tettuan/breakdownlogger";
 import {
   BreakdownLoggerEnvConfig,
   CIError,
@@ -90,10 +90,8 @@ export class CILogger {
     if (this.mode.kind === "debug" && this.breakdownConfig) {
       this.breakdownConfig.setEnvironmentVariables();
 
-      // BreakdownLoggerのログレベルを設定
-      if (this.breakdownLogger) {
-        this.breakdownLogger.setLogLevel(LogLevel.DEBUG);
-      }
+      // BreakdownLogger v1.0.x では環境変数でログレベルを制御
+      // setLogLevel メソッドは削除されました
     }
   }
 

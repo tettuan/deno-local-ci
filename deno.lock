@@ -2,8 +2,8 @@
   "version": "5",
   "specifiers": {
     "jsr:@std/internal@^1.0.9": "1.0.9",
-    "jsr:@std/path@^1.0.8": "1.1.1",
-    "jsr:@tettuan/breakdownlogger@~0.1.10": "0.1.10"
+    "jsr:@std/path@^1.1.1": "1.1.1",
+    "jsr:@tettuan/breakdownlogger@^1.0.8": "1.0.8"
   },
   "jsr": {
     "@std/internal@1.0.9": {
@@ -15,8 +15,8 @@
         "jsr:@std/internal"
       ]
     },
-    "@tettuan/breakdownlogger@0.1.10": {
-      "integrity": "3094af14f9271234b01280c4cf379d36f7b429531a434f169d3dce569d60e146"
+    "@tettuan/breakdownlogger@1.0.8": {
+      "integrity": "fb472218ac543506f43aa908a015cb31dd3c9704317eefdadf43a2501720927c"
     }
   },
   "remote": {
@@ -55,8 +55,8 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@std/path@^1.0.8",
-      "jsr:@tettuan/breakdownlogger@~0.1.10"
+      "jsr:@std/path@^1.1.1",
+      "jsr:@tettuan/breakdownlogger@^1.0.8"
     ]
   }
 }
