@@ -62,7 +62,7 @@
     "ci-silent": "deno run --allow-read --allow-write --allow-run --allow-env mod.ts --log-mode silent",
     "ci-batch": "deno run --allow-read --allow-write --allow-run --allow-env mod.ts --mode batch --batch-size 10",
     "ci-all": "deno run --allow-read --allow-write --allow-run --allow-env mod.ts --mode all",
-    "update-lock": "rm -f deno.lock && deno cache mod.ts && deno cache $(find . -name '*.test.ts' | tr '\\n' ' ')",
+    "update-lock": "deno eval \"try { Deno.removeSync('deno.lock'); } catch { /* ignore */ }\" && deno cache mod.ts && deno cache src/cli_parser.test.ts src/domain_services.test.ts src/logger.test.ts src/types.test.ts tests/3_core/ci_integration.test.ts",
     "publish": "deno publish"
   },
   "fmt": {

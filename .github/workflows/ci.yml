@@ -31,15 +31,15 @@ jobs:
 
       - name: Clean and regenerate lock file
         run: |
-          # Remove existing lock file
-          rm -f deno.lock
+          # Remove existing lock file (cross-platform)
+          deno eval "try { Deno.removeSync('deno.lock'); } catch { /* ignore if not exists */ }"
           
           # Cache dependencies to regenerate lock file
           deno cache mod.ts
-          deno cache $(find . -name "*.test.ts" | tr '\n' ' ')
+          deno cache src/cli_parser.test.ts src/domain_services.test.ts src/logger.test.ts src/types.test.ts tests/3_core/ci_integration.test.ts
           
-          # Verify lock file was created
-          ls -la deno.lock || echo "Warning: Lock file not generated"
+          # Verify lock file was created (cross-platform)
+          deno eval "try { const stat = Deno.statSync('deno.lock'); console.log('✅ Lock file generated:', stat.size, 'bytes'); } catch { console.log('⚠️ Warning: Lock file not generated'); }"
 
       - name: Verify project structure
         run: |
@@ -82,12 +82,12 @@ jobs:
 
       - name: Clean and regenerate lock file
         run: |
-          # Remove existing lock file
-          rm -f deno.lock
+          # Remove existing lock file (cross-platform)
+          deno eval "try { Deno.removeSync('deno.lock'); } catch { /* ignore if not exists */ }"
           
           # Cache dependencies to regenerate lock file for compatibility test
           deno cache mod.ts
-          deno cache $(find . -name "*.test.ts" | tr '\n' ' ')
+          deno cache src/cli_parser.test.ts src/domain_services.test.ts src/logger.test.ts src/types.test.ts tests/3_core/ci_integration.test.ts
 
       - name: Type check
         run: deno check mod.ts
