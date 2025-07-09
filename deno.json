@@ -20,14 +20,7 @@
     "@tettuan/breakdownlogger": "jsr:@tettuan/breakdownlogger@^0.1.10"
   },
   "exports": {
-    ".": "./mod.ts",
-    "./ci-runner": "./src/ci_runner.ts",
-    "./logger": "./src/logger.ts",
-    "./cli-parser": "./src/cli_parser.ts",
-    "./process-runner": "./src/process_runner.ts",
-    "./file-system": "./src/file_system.ts",
-    "./domain-services": "./src/domain_services.ts",
-    "./types": "./src/types.ts"
+    ".": "./mod.ts"
   },
   "publish": {
     "exclude": [

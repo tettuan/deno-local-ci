@@ -26,14 +26,14 @@
  * @module
  */
 
-// === Core Types ===
+// === Essential Types for Public API ===
 
 /**
- * Core type definitions for the CI system.
+ * Essential type definitions for using the CI system.
  *
  * @example
  * ```typescript
- * import type { CIConfig, ExecutionMode } from "@aidevtool/ci";
+ * import type { CIConfig, Result } from "@aidevtool/ci";
  *
  * const config: CIConfig = {
  *   mode: { kind: "batch", batchSize: 25 },
@@ -44,96 +44,32 @@
 export type {
   /** Configuration object for the CI runner */
   CIConfig,
-  /** Error type used throughout the CI system */
-  CIError,
-  /** Represents a CI pipeline stage */
-  CIStage,
-  /** Execution mode for running tests */
-  ExecutionMode,
-  /** Logging configuration mode */
-  LogMode,
-  /** Result of process execution */
-  ProcessResult,
   /** Generic result type with success/error states */
   Result,
   /** Result of a CI stage execution */
   StageResult,
-  /** Classification of test file types */
-  TestFileType,
-  /** Result of test execution */
-  TestResult,
-  /** Validation error details */
-  ValidationError,
 } from "./src/types.ts";
 
+// === Main CI Runner ===
+
 /**
- * Utility types and helper functions.
+ * Main CI runner that orchestrates the entire CI pipeline.
  *
  * @example
  * ```typescript
- * import { ExecutionStrategy, createError } from "@aidevtool/ci";
+ * import { CIRunner, CILogger, LogModeFactory } from "@aidevtool/ci";
  *
- * const strategy = ExecutionStrategy.batch(25);
- * const error = createError("TypeCheckError", "Type check failed");
+ * const logger = CILogger.create(LogModeFactory.normal()).data!;
+ * const runnerResult = await CIRunner.create(logger, {}, "/path/to/project");
+ * if (runnerResult.ok) {
+ *   const result = await runnerResult.data.run();
+ *   console.log(result.success ? "✅ CI passed" : "❌ CI failed");
+ * }
  * ```
  */
-export { BreakdownLoggerEnvConfig, createError, ExecutionStrategy } from "./src/types.ts";
+export { type CIExecutionResult, CIRunner } from "./src/ci_runner.ts";
 
-// === Domain Services ===
-
-/**
- * Domain services implementing the core business logic of the CI system.
- * These services handle pipeline orchestration, error classification, and execution strategies.
- *
- * @example
- * ```typescript
- * import { CIPipelineOrchestrator, ExecutionStrategyService } from "@aidevtool/ci";
- *
- * const orchestrator = new CIPipelineOrchestrator();
- * const strategy = ExecutionStrategyService.determineStrategy(files);
- * ```
- */
-export {
-  /** Orchestrates the CI pipeline execution flow */
-  CIPipelineOrchestrator,
-  /** Classifies and categorizes CI errors */
-  ErrorClassificationService,
-  /** Determines optimal execution strategies */
-  ExecutionStrategyService,
-  /** Classifies and filters project files */
-  FileClassificationService,
-  /** Handles fallback logic between execution modes */
-  StageInternalFallbackService,
-} from "./src/domain_services.ts";
-
-// === Infrastructure Services ===
-
-/**
- * Infrastructure services for process execution and system interaction.
- *
- * @example
- * ```typescript
- * import { ProcessRunner, DenoCommandRunner } from "@aidevtool/ci";
- *
- * const runner = new ProcessRunner();
- * const result = await runner.run("deno", ["test", "file.test.ts"]);
- * ```
- */
-export { DenoCommandRunner, ProcessRunner } from "./src/process_runner.ts";
-
-/**
- * File system operations and project file discovery.
- *
- * @example
- * ```typescript
- * import { FileSystemService, ProjectFileDiscovery } from "@aidevtool/ci";
- *
- * const fs = new FileSystemService();
- * const discovery = new ProjectFileDiscovery(fs);
- * const files = await discovery.discoverProjectFiles("/path/to/project");
- * ```
- */
-export { FileSystemService, ProjectFileDiscovery } from "./src/file_system.ts";
+// === Logger Interface ===
 
 /**
  * Logging infrastructure with multiple modes and BreakdownLogger integration.
@@ -152,6 +88,8 @@ export { FileSystemService, ProjectFileDiscovery } from "./src/file_system.ts";
  */
 export { CILogger, LogModeFactory } from "./src/logger.ts";
 
+// === CLI Interface ===
+
 /**
  * Command-line interface parsing and configuration.
  *
@@ -165,28 +103,9 @@ export { CILogger, LogModeFactory } from "./src/logger.ts";
  * }
  * ```
  */
-export { type CLIOptions, CLIParser } from "./src/cli_parser.ts";
+export { CLIParser } from "./src/cli_parser.ts";
 
-// === Core CI Runner ===
-
-/**
- * Main CI runner that orchestrates the entire CI pipeline.
- *
- * @example
- * ```typescript
- * import { CIRunner, CILogger, LogModeFactory } from "@aidevtool/ci";
- *
- * const logger = CILogger.create(LogModeFactory.normal()).data!;
- * const runnerResult = await CIRunner.create(logger, {}, "/path/to/project");
- * if (runnerResult.ok) {
- *   const result = await runnerResult.data.run();
- *   console.log(result.success ? "CI passed" : "CI failed");
- * }
- * ```
- */
-export { type CIExecutionResult, CIRunner } from "./src/ci_runner.ts";
-
-// === CLI Interface ===
+// === Main Entry Point ===
 
 /**
  * Main entry point for running the CI system from command line or programmatically.
