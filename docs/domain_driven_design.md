@@ -1,31 +1,16 @@
-# ドメイン駆動設計：Deno Local CI の中核ドメイン
+# Deno Local CI ドメイン設計
 
-## ユビキタス言語（Ubiquitous Language）
+## ユビキタス言語
 
-### 中核概念（Core Concepts）
+**ExecutionStrategy**: 各CI段階の実行方法（All → Batch → Single-file フォールバック）
+**Stage-Internal Fallback**: Batchモード失敗時、エラー発生バッチ範囲のみを1ファイルずつ実行
+**CI Stage**: 型チェック → JSR → テスト → リント → フォーマット（エラー時停止）
+**Batch Size**: 並列実行ファイル数（1-100、デフォルト25）
+**File Type**: *_test.ts、*.test.ts | *.ts、*.tsx、*.d.ts | deno.json、deno.lock、import_map.json
+**BreakdownLogger**: `@tettuan/breakdownlogger`（LOG_LENGTH: W/M/L、LOG_KEY）
 
-**実行戦略（ExecutionStrategy）**: テスト実行の方法と順序を決定する戦略パターン（All → Batch → Single-file フォールバック）
-
-**フォールバック（Fallback）**: 上位実行戦略の失敗時に、より詳細な戦略へ段階的に移行する仕組み
-
-**CI段階（CI Stage）**: CI/CDパイプライン内の独立した検証ステップ（型チェック → JSR → テスト → フォーマット/リント）
-
-**バッチサイズ（Batch Size）**: 一度に並列実行するテストファイルの数（1-100、デフォルト25）
-
-**テストファイル種別（Test File Type）**: 処理対象ファイルの分類（*_test.ts | *.ts,*.tsx,*.d.ts | deno.json）
-
-**BreakdownLogger**: JSRパッケージ `@tettuan/breakdownlogger` を使用するアプリケーションの出力制御（環境変数 LOG_LENGTH: W/M/L、LOG_KEY でフィルタリング）
-
-### エラー分類
-
-**復旧可能エラー**: TestFailure（フォールバック可能）
-**致命的エラー**: TypeCheckError, JSRError, FormatError, LintError, ConfigurationError, FileSystemError（即停止）
-
-### 型安全概念
-
-**Result型**: 成功値またはエラー値を型安全に表現 `{ ok: boolean; data?: T; error?: E }`
-**Smart Constructor**: 制約付きコンストラクタパターン `private constructor + static create`
-**Discriminated Union**: 型タグによる状態区別 `{ kind: string; ... }`
+**エラー分類**: TestFailure（復旧可能）、TypeCheck/JSR/Format/Lint/Config/FileSystem（致命的・即停止）
+**型安全**: Result型、Smart Constructor、Discriminated Union
 
 ## 中核ドメイン（Core Domain）
 
@@ -67,8 +52,6 @@ type TestFileType =
   | { kind: "config"; pattern: "deno.json" | "deno.lock" | "import_map.json" };
 ```
 
-**ドメインルール**: All → Batch → Single-file の段階的フォールバック、型チェック → JSR → テスト → フォーマット/リント の順次実行
-
 ## サポートドメイン（Support Domain）
 
 ```typescript
@@ -78,8 +61,8 @@ type CIStage =
   | { kind: "type-check"; files: string[]; optimized: boolean }
   | { kind: "jsr-check"; dryRun: boolean; allowDirty: boolean }
   | { kind: "test-execution"; strategy: ExecutionStrategy }
-  | { kind: "format-check"; checkOnly: boolean }
-  | { kind: "lint-check"; files: string[] };
+  | { kind: "lint-check"; files: string[] }
+  | { kind: "format-check"; checkOnly: boolean };
 
 type StageResult = 
   | { kind: "success"; stage: CIStage; duration: number }
@@ -95,11 +78,7 @@ type CIError =
   | { kind: "LintError"; files: string[]; details: string[] }
   | { kind: "ConfigurationError"; field: string; value: unknown }
   | { kind: "FileSystemError"; operation: string; path: string; cause: string };
-```
 
-## 汎用サブドメイン（Generic Subdomain）
-
-```typescript
 // ログ出力ドメイン - BreakdownLogger環境変数制御
 type LogMode = 
   | { kind: "normal"; showSections: true }
@@ -127,15 +106,6 @@ class BreakdownLoggerEnvConfig {
 }
 ```
 
-## 全域性原則（Totality Principle）
-
-**詳細な設計指針と実装パターンについては [`totality.ja.md`](./totality.ja.md) を参照**
-
-本プロジェクトでは以下の全域性パターンを適用：
-- **Result型**: `{ ok: boolean; data?: T; error?: E }`
-- **Discriminated Union**: `{ kind: string; ... }`  
-- **Smart Constructor**: `private constructor + static create`
-
 ## ドメインサービス
 
 ```typescript
@@ -146,7 +116,29 @@ class ExecutionStrategyService {
   }
 
   static shouldFallback(strategy: ExecutionStrategy, error: CIError): boolean {
+    const fatalErrors = ["TypeCheckError", "JSRError", "FormatError", "LintError", "ConfigurationError", "FileSystemError"];
+    if (fatalErrors.includes(error.kind)) return false;
     return error.kind === "TestFailure" && strategy.fallbackEnabled && strategy.mode.kind !== "single-file";
+  }
+}
+
+class StageInternalFallbackService {
+  static createFallbackStrategy(
+    currentStrategy: ExecutionStrategy, 
+    failedBatch?: { startIndex: number; endIndex: number; files: string[] }
+  ): Result<ExecutionStrategy, ValidationError> {
+    const nextMode = currentStrategy.getNextFallbackMode();
+    if (!nextMode) return { ok: false, error: { kind: "EmptyInput" } };
+
+    if (currentStrategy.mode.kind === "batch" && nextMode.kind === "single-file" && failedBatch) {
+      const fallbackMode: ExecutionMode = { kind: "single-file", stopOnFirstError: true };
+      return ExecutionStrategy.create(fallbackMode, currentStrategy.fallbackEnabled);
+    }
+    return ExecutionStrategy.create(nextMode, currentStrategy.fallbackEnabled);
+  }
+
+  static shouldRetryWithFallback(error: CIError, stage: CIStage): boolean {
+    return error.kind === "TestFailure" && stage.kind === "test-execution";
   }
 }
 
@@ -159,40 +151,54 @@ class ErrorClassificationService {
     if (stderr.includes("test") && stderr.includes("failed")) {
       return { kind: "TestFailure", files: this.extractFileNames(result.stderr), errors: [result.stderr] };
     }
-    // ... 他のエラー分類
+    if (stderr.includes("jsr") || stderr.includes("publish")) {
+      return { kind: "JSRError", output: result.stderr, suggestion: "Check JSR compatibility" };
+    }
+    if (stderr.includes("format")) {
+      return { kind: "FormatError", files: this.extractFileNames(result.stderr), fixCommand: "deno fmt" };
+    }
+    if (stderr.includes("lint")) {
+      return { kind: "LintError", files: this.extractFileNames(result.stderr), details: [result.stderr] };
+    }
     return { kind: "FileSystemError", operation: "unknown", path: "unknown", cause: result.stderr };
+  }
+
+  private static extractFileNames(output: string): string[] {
+    const filePattern = /[\w\/\-\.]+\.tsx?/g;
+    return output.match(filePattern) || [];
+  }
+}
+
+class CIPipelineOrchestrator {
+  static readonly STAGE_ORDER: Array<CIStage["kind"]> = [
+    "type-check", "jsr-check", "test-execution", "lint-check", "format-check"
+  ];
+
+  static getNextStage(currentStage: CIStage["kind"]): CIStage["kind"] | null {
+    const currentIndex = this.STAGE_ORDER.indexOf(currentStage);
+    return currentIndex >= 0 && currentIndex < this.STAGE_ORDER.length - 1 
+      ? this.STAGE_ORDER[currentIndex + 1] : null;
+  }
+
+  static shouldStopPipeline(error: CIError): boolean {
+    return true; // すべてのエラーでパイプライン停止
   }
 }
 ```
 
-## 重要な不変条件（Invariants）
+## 重要な不変条件・アーキテクチャ決定
 
-1. **実行戦略**: 単一モードのみ有効（Discriminated Union保証）、段階的フォールバック（All → Batch → Single-file）
-2. **エラー処理**: 各CI段階での失敗時即停止、エラー分類の完全性、部分関数の禁止
-3. **ログ出力**: Debug時のBreakdownLogger環境変数設定、Silent時のエラーのみ表示
-4. **ファイル対象**: *_test.ts | *.ts,*.tsx,*.d.ts | deno.json の明確な分類
+**実行戦略**: 単一モード、段階的フォールバック（All → Batch → Single-file）、各CI段階適用
+**エラー処理**: 各段階失敗時即停止、TestFailureのみフォールバック、致命的エラー即停止
+**ログ出力**: Debug時BreakdownLogger環境変数設定、Silent時エラーのみ
+**ファイル対象**: テスト・型チェック・設定ファイルの明確分類
 
-## アーキテクチャ決定
+**中核ドメイン分離**: ExecutionStrategy・各CI段階独立性、段階内フォールバック
+**エラー処理一元化**: Discriminated Union統一処理、復旧可能/致命的エラー分類
+**設定階層化**: CLI引数 → 環境変数 → デフォルト値
 
-1. **中核ドメイン分離**: ExecutionStrategy・TestExecutionの独立性、`kind`タグによる状態明確化
-2. **エラー処理一元化**: Discriminated Unionによる統一処理、例外からResult型への変換
-3. **設定階層化**: CLI引数 → 環境変数 → デフォルト値の優先順位
+## 実装原則
 
-## 実装チェックリスト
-
-### 🚫 禁止パターン
-- `as Type`型変換 → Smart Constructor使用
-- オプショナルプロパティ状態表現 → Discriminated Union使用
-- 例外制御フロー → Result型使用
-
-### ✅ 推奨パターン
-- Discriminated Union: `{ kind: string; ... }` ✅
-- Result型: `{ ok: boolean; data?: T; error?: E }` ✅
-- Smart Constructor: `private constructor + static create` ✅
-- `switch`文による網羅的分岐 ✅
-
-### 品質指標
-- [✅] ビジネスルールの型定義反映
-- [✅] コンパイル時不正状態検出
-- [✅] `switch`文`default`不要（全パターン網羅）
-- [✅] 関数戻り値の予測可能性
+**禁止**: `as Type`型変換、オプショナルプロパティ状態表現、例外制御フロー
+**推奨**: Discriminated Union、Result型、Smart Constructor、`switch`文網羅的分岐
+**品質**: ビジネスルール型定義反映、コンパイル時不正状態検出、`default`不要、予測可能戻り値
