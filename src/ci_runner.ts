@@ -1,8 +1,17 @@
 /**
- * Deno Local CI - CI Runner
+ * # Deno Local CI - CI Runner
  *
- * CI実行の中核とパイプライン管理の責務
- * 段階的実行とフォールバック戦略の実装
+ * The core orchestration module responsible for managing the complete CI pipeline execution.
+ * Implements staged execution with intelligent fallback strategies and comprehensive error handling.
+ *
+ * ## Features
+ * - **Pipeline Management**: Orchestrates the complete CI workflow
+ * - **Execution Strategies**: Supports single-file, batch, and all execution modes
+ * - **Fallback Logic**: Automatically falls back to more conservative strategies on failures
+ * - **Error Classification**: Categorizes errors for appropriate handling and reporting
+ * - **Performance Optimization**: Batch processing with configurable sizes
+ *
+ * @module
  */
 
 import {
@@ -27,17 +36,47 @@ import { ProjectFileDiscovery } from "./file_system.ts";
 import { CILogger } from "./logger.ts";
 
 /**
- * CI実行結果
+ * Result of CI execution containing success status, stage results, and timing information.
+ *
+ * @example
+ * ```typescript
+ * const result = await runner.run();
+ * if (result.success) {
+ *   console.log(`CI completed in ${result.totalDuration}ms`);
+ * } else {
+ *   console.error(`CI failed: ${result.errorDetails?.message}`);
+ * }
+ * ```
  */
 export interface CIExecutionResult {
+  /** Whether the entire CI pipeline completed successfully */
   success: boolean;
+  /** Results from each completed stage */
   completedStages: StageResult[];
+  /** Total execution time in milliseconds */
   totalDuration: number;
+  /** Error details if the CI failed */
   errorDetails?: CIError;
 }
 
 /**
- * CI実行サービス
+ * Main CI runner class that orchestrates the complete CI pipeline.
+ *
+ * Manages the execution of all CI stages (type check, JSR check, test, lint, format)
+ * with intelligent fallback strategies and comprehensive error handling.
+ *
+ * @example
+ * ```typescript
+ * import { CIRunner, CILogger, LogModeFactory } from "@aidevtool/ci";
+ *
+ * const logger = CILogger.create(LogModeFactory.normal()).data!;
+ * const runnerResult = await CIRunner.create(logger, {}, "/path/to/project");
+ *
+ * if (runnerResult.ok) {
+ *   const result = await runnerResult.data.run();
+ *   console.log(result.success ? "✅ CI passed" : "❌ CI failed");
+ * }
+ * ```
  */
 export class CIRunner {
   private readonly logger: CILogger;

@@ -1,8 +1,18 @@
 /**
- * Deno Local CI - Logger Service
+ * # Deno Local CI - Logger Service
  *
- * ログ出力とBreakdownLogger統合の責務
- * 段階的ログレベルとエラーファイル表示
+ * Comprehensive logging infrastructure with multiple output modes and BreakdownLogger integration.
+ * Provides structured, contextual logging for all CI pipeline stages and operations.
+ *
+ * ## Features
+ * - **Multiple Log Modes**: Normal, silent, debug, and error-files-only modes
+ * - **BreakdownLogger Integration**: Enhanced debug logging with timestamps and structured output
+ * - **Stage-Aware Logging**: Specialized logging for CI pipeline stages
+ * - **Error Classification**: Structured error reporting with context
+ * - **Performance Tracking**: Duration tracking and performance metrics
+ * - **Fallback Support**: Graceful degradation when external loggers are unavailable
+ *
+ * @module
  */
 
 import { BreakdownLogger, LogLevel } from "@tettuan/breakdownlogger";
@@ -18,7 +28,30 @@ import {
 } from "./types.ts";
 
 /**
- * CI専用ロガー
+ * CI-specialized logger with multiple output modes and BreakdownLogger integration.
+ *
+ * Provides comprehensive logging capabilities for CI pipeline execution,
+ * including stage tracking, error reporting, and performance metrics.
+ *
+ * @example
+ * ```typescript
+ * import { CILogger, LogModeFactory } from "@aidevtool/ci";
+ *
+ * // Create logger with debug mode
+ * const mode = LogModeFactory.debug();
+ * const config = { key: "CI_DEBUG", length: "M" };
+ * const loggerResult = CILogger.create(mode, config);
+ *
+ * if (loggerResult.ok) {
+ *   const logger = loggerResult.data;
+ *   logger.logInfo("Starting CI process");
+ *   logger.logStageStart({
+ *     kind: "type-check",
+ *     files: ["src/main.ts"],
+ *     optimized: true
+ *   });
+ * }
+ * ```
  */
 export class CILogger {
   private readonly breakdownLogger?: BreakdownLogger;

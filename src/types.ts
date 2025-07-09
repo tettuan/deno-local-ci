@@ -1,16 +1,72 @@
 /**
- * Deno Local CI - Core Type Definitions
+ * # Deno Local CI - Core Type Definitions
  *
- * 全域性原則に基づく型安全なCI実行システムの中核型定義
- * Discriminated Union、Result型、Smart Constructorによる型安全性確保
+ * Comprehensive type system for type-safe CI execution based on totality principles.
+ * Implements discriminated unions, Result types, and smart constructors for robust type safety.
+ *
+ * ## Design Principles
+ * - **Type Safety**: Complete type coverage with no `any` types
+ * - **Error Values**: All errors are represented as values, not exceptions
+ * - **Discriminated Unions**: Precise state modeling with exhaustive pattern matching
+ * - **Smart Constructors**: Validated construction preventing invalid states
+ * - **Immutability**: All types are immutable by design
+ *
+ * @module
  */
 
-// === Result型によるエラー値化 ===
+// === Result Type for Error Value Handling ===
+
+/**
+ * Generic Result type for error handling without exceptions.
+ *
+ * Represents either a successful result with data or a failure with error information.
+ * This pattern eliminates the need for try-catch blocks and makes error handling explicit.
+ *
+ * @template T - The type of successful result data
+ * @template E - The type of error information
+ *
+ * @example
+ * ```typescript
+ * function parseNumber(input: string): Result<number, string> {
+ *   const num = parseInt(input);
+ *   return isNaN(num)
+ *     ? { ok: false, error: "Invalid number" }
+ *     : { ok: true, data: num };
+ * }
+ *
+ * const result = parseNumber("42");
+ * if (result.ok) {
+ *   console.log(result.data); // TypeScript knows this is number
+ * } else {
+ *   console.error(result.error); // TypeScript knows this is string
+ * }
+ * ```
+ */
 export type Result<T, E> =
   | { ok: true; data: T }
   | { ok: false; error: E };
 
-// === 共通エラー型定義 ===
+// === Common Error Type Definitions ===
+
+/**
+ * Comprehensive validation error types for input validation across the system.
+ *
+ * Uses discriminated unions to provide precise error classification with context.
+ * Each error variant includes relevant information for error reporting and debugging.
+ *
+ * @example
+ * ```typescript
+ * function validateBatchSize(size: number): Result<number, ValidationError> {
+ *   if (size < 1 || size > 100) {
+ *     return {
+ *       ok: false,
+ *       error: { kind: "OutOfRange", value: size, min: 1, max: 100 }
+ *     };
+ *   }
+ *   return { ok: true, data: size };
+ * }
+ * ```
+ */
 export type ValidationError =
   | { kind: "OutOfRange"; value: unknown; min?: number; max?: number }
   | { kind: "InvalidRegex"; pattern: string }
@@ -20,13 +76,36 @@ export type ValidationError =
   | { kind: "TooLong"; value: string; maxLength: number }
   | { kind: "FileSystemError"; operation: string; path: string; cause: string };
 
-// === CI実行戦略ドメイン ===
+// === CI Execution Strategy Domain ===
+
+/**
+ * Execution mode configuration for the CI pipeline.
+ *
+ * Defines how tests and checks should be executed, with different modes
+ * optimized for different scenarios and performance characteristics.
+ *
+ * @example
+ * ```typescript
+ * // Batch mode for balanced performance and isolation
+ * const batchMode: ExecutionMode = {
+ *   kind: "batch",
+ *   batchSize: 25,
+ *   failedBatchOnly: false
+ * };
+ *
+ * // Single-file mode for maximum isolation and debugging
+ * const singleFileMode: ExecutionMode = {
+ *   kind: "single-file",
+ *   stopOnFirstError: true
+ * };
+ * ```
+ */
 export type ExecutionMode =
   | { kind: "all"; projectDirectories: string[] }
   | { kind: "batch"; batchSize: number; failedBatchOnly: boolean }
   | { kind: "single-file"; stopOnFirstError: boolean };
 
-// === CI段階・エラー型定義 ===
+// === CI Stage and Error Type Definitions ===
 export type CIStage =
   | { kind: "lockfile-init"; action: "regenerate" }
   | { kind: "type-check"; files: string[]; optimized: boolean }

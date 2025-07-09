@@ -1,8 +1,17 @@
 /**
- * Deno Local CI - CLI Parser
+ * # Deno Local CI - CLI Parser
  *
- * コマンドライン引数解析とオプション管理の責務
- * 型安全な設定値解析とバリデーション
+ * Command-line interface parsing and configuration management module.
+ * Provides type-safe argument parsing, validation, and configuration building.
+ *
+ * ## Features
+ * - **Type-Safe Parsing**: Validates all command-line arguments with proper type checking
+ * - **Configuration Building**: Transforms CLI options into structured CI configuration
+ * - **Validation**: Comprehensive input validation with detailed error messages
+ * - **Help System**: Automatic help generation and version information
+ * - **Flexible Options**: Supports all execution modes and logging configurations
+ *
+ * @module
  */
 
 import {
@@ -16,17 +25,37 @@ import {
 } from "./types.ts";
 
 /**
- * CLIオプション定義
+ * Command-line interface options configuration.
+ * Defines all available CLI parameters with their types and constraints.
+ *
+ * @example
+ * ```typescript
+ * const options: CLIOptions = {
+ *   mode: "batch",
+ *   batchSize: 25,
+ *   logMode: "debug",
+ *   fallbackEnabled: true
+ * };
+ * ```
  */
 export interface CLIOptions {
+  /** Execution mode: 'all', 'batch', or 'single-file' */
   mode?: "all" | "batch" | "single-file";
+  /** Number of files to process per batch (1-100) */
   batchSize?: number;
+  /** Whether to enable automatic fallback to safer modes */
   fallbackEnabled?: boolean;
+  /** Logging verbosity mode */
   logMode?: "normal" | "silent" | "debug" | "error-files-only";
+  /** BreakdownLogger message length setting */
   logLength?: "W" | "M" | "L";
+  /** BreakdownLogger environment key */
   logKey?: string;
+  /** Whether to stop pipeline on first stage failure */
   stopOnFirstError?: boolean;
+  /** Allow execution in dirty git repository */
   allowDirty?: boolean;
+  /** File filter pattern for selective execution */
   filter?: string;
   help?: boolean;
   version?: boolean;

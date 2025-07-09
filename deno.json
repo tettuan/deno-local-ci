@@ -1,17 +1,20 @@
 {
   "name": "@aidevtool/ci",
-  "version": "0.1.0",
-  "description": "TypeScript-based CI runner for Deno projects with comprehensive testing, formatting, and linting capabilities",
+  "version": "1.0.0",
+  "description": "A comprehensive TypeScript-based CI runner for Deno projects with robust testing, formatting, linting, and type checking capabilities. Built with Domain-Driven Design principles and strong type safety.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/aidevtool/deno-local-ci.git"
+    "url": "git+https://github.com/tettuan/deno-local-ci.git"
   },
   "bugs": {
-    "url": "https://github.com/aidevtool/deno-local-ci/issues"
+    "url": "https://github.com/tettuan/deno-local-ci/issues"
   },
-  "homepage": "https://github.com/aidevtool/deno-local-ci#readme",
-  "author": "aidevtool",
+  "homepage": "https://github.com/tettuan/deno-local-ci#readme",
+  "author": {
+    "name": "tettuan",
+    "url": "https://github.com/tettuan"
+  },
   "imports": {
     "@std/path": "jsr:@std/path@^1.0.0",
     "@tettuan/breakdownlogger": "jsr:@tettuan/breakdownlogger@^0.1.10"
@@ -23,26 +26,37 @@
     "./cli-parser": "./src/cli_parser.ts",
     "./process-runner": "./src/process_runner.ts",
     "./file-system": "./src/file_system.ts",
+    "./domain-services": "./src/domain_services.ts",
     "./types": "./src/types.ts"
   },
   "publish": {
     "exclude": [
       ".git/",
+      ".github/",
       ".vscode/",
       "*.test.ts",
+      "tests/",
       "test_data/",
-      "examples/"
+      "examples/",
+      "docs/",
+      "local_ci.ts"
     ]
   },
   "keywords": [
     "ci",
+    "continuous-integration",
     "testing",
     "deno",
     "typescript",
     "automation",
     "lint",
     "format",
-    "continuous-integration"
+    "type-check",
+    "jsr-compatible",
+    "domain-driven-design",
+    "pipeline",
+    "batch-processing",
+    "error-handling"
   ],
   "tasks": {
     "dev": "deno run --allow-read --allow-write --allow-run --allow-env local_ci.ts",
@@ -58,20 +72,14 @@
     "publish": "deno publish"
   },
   "fmt": {
-    "files": {
-      "include": ["src/", "*.ts", "*.md"]
-    },
-    "options": {
-      "useTabs": false,
-      "lineWidth": 100,
-      "indentWidth": 2,
-      "singleQuote": false
-    }
+    "include": ["src/", "*.ts", "*.md"],
+    "useTabs": false,
+    "lineWidth": 100,
+    "indentWidth": 2,
+    "singleQuote": false
   },
   "lint": {
-    "files": {
-      "include": ["src/", "*.ts"]
-    },
+    "include": ["src/", "*.ts"],
     "rules": {
       "tags": ["recommended"]
     }
