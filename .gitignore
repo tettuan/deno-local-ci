@@ -1,0 +1,140 @@
+# Deno Local CI - Git除外設定
+
+# ===========================================
+# テスト関連の動的生成ファイル
+# ===========================================
+
+# エラーテスト用ディレクトリ（動的に生成されるため除外）
+tests/error_tests/
+
+# エラーファイルパターン（どこに作成されても除外）
+**/error_file_*.ts
+**/error_test_*.test.ts
+
+# ===========================================
+# ログ・一時ファイル
+# ===========================================
+
+# ログファイル
+*.log
+logs/
+.log/
+
+# 一時ファイル
+*.tmp
+*.temp
+temp/
+.temp/
+
+# テスト結果ファイル
+test-results/
+coverage/
+
+# ===========================================
+# IDE・エディタ設定
+# ===========================================
+
+# VS Code（ディレクトリ全体を除外）
+.vscode/
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.iws
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# ===========================================
+# OS生成ファイル
+# ===========================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ===========================================
+# Deno関連
+# ===========================================
+
+# Deno cache（通常は除外しないが、プロジェクト固有キャッシュがあれば）
+# .deno/
+
+# ===========================================
+# Node.js関連（必要に応じて）
+# ===========================================
+
+# node_modules（Denoプロジェクトでは通常不要）
+# node_modules/
+# npm-debug.log*
+# yarn-debug.log*
+# yarn-error.log*
+
+# ===========================================
+# デバッグ・プロファイル
+# ===========================================
+
+# デバッグファイル
+debug.log
+*.debug
+.debugger/
+
+# プロファイルファイル
+*.prof
+*.profile
+
+# ===========================================
+# プロジェクト固有の除外
+# ===========================================
+
+# テスト用一時ディレクトリ
+test-temp/
+.test-temp/
+
+# CI実行時の一時データ
+ci-temp/
+.ci-temp/
+
+# パフォーマンステスト結果
+perf-results/
+benchmarks/results/
