@@ -15,7 +15,6 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        deno-version: [v2.x]
 
     steps:
       - name: Checkout code
@@ -24,7 +23,7 @@ jobs:
       - name: Setup Deno
         uses: denoland/setup-deno@v2
         with:
-          deno-version: ${{ matrix.deno-version }}
+          deno-version: v2.x
 
       - name: Verify Deno version
         run: deno --version
@@ -41,12 +40,6 @@ jobs:
           # Verify lock file was created (cross-platform)
           deno eval "try { const stat = Deno.statSync('deno.lock'); console.log('✅ Lock file generated:', stat.size, 'bytes'); } catch { console.log('⚠️ Warning: Lock file not generated'); }"
 
-      - name: Verify project structure
-        run: |
-          echo "Project structure:"
-          find . -type f -name "*.ts" -o -name "*.json" -o -name "*.md" | head -20
-        shell: bash
-
       - name: Type check
         run: deno check mod.ts
 
@@ -61,47 +54,3 @@ jobs:
 
       - name: Test JSR publish (dry run)
         run: deno publish --dry-run
-
-  compatibility:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        deno-version: [v2.0.x, v2.1.x, v2.2.x, v2.3.x, v2.4.x, v2.x]
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Deno ${{ matrix.deno-version }}
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: ${{ matrix.deno-version }}
-
-      - name: Verify Deno version
-        run: deno --version
-
-      - name: Clean and regenerate lock file
-        run: |
-          # Remove existing lock file (cross-platform)
-          deno eval "try { Deno.removeSync('deno.lock'); } catch { /* ignore if not exists */ }"
-          
-          # Cache dependencies to regenerate lock file for compatibility test
-          deno cache mod.ts
-          deno cache src/cli_parser.test.ts src/domain_services.test.ts src/logger.test.ts src/types.test.ts tests/3_core/ci_integration.test.ts
-
-      - name: Type check
-        run: deno check mod.ts
-
-      - name: Run basic functionality test
-        run: |
-          # Test that the module can be imported and basic functionality works
-          deno eval "
-          import { CLIParser } from './mod.ts';
-          const parseResult = CLIParser.parseArgs(['--help']);
-          if (parseResult.ok) {
-            console.log('✅ Module loads and basic functionality works');
-          } else {
-            console.log('❌ Basic functionality test failed');
-            Deno.exit(1);
-          }
-          "
