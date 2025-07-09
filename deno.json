@@ -1,6 +1,6 @@
 {
   "name": "@aidevtool/ci",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Modern TypeScript CI/CD runner for Deno v2.x with automated testing, formatting, linting, type checking, and JSR publishing. Features domain-driven design, robust error handling, batch processing, and comprehensive logging for efficient local development and GitHub Actions integration.",
   "license": "MIT",
   "repository": {

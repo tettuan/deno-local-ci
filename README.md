@@ -165,23 +165,23 @@ console.log(`Found ${projectFiles.testFiles.length} test files`);
 
 ## 🔧 コマンドライン引数オプション
 
-| オプション                     | 説明                                                         | デフォルト値       | 例                              |
-| ----------------------------- | ------------------------------------------------------------ | ----------------- | ------------------------------- |
-| `--mode <mode>`               | 実行モード: `all`, `batch`, `single-file`（実行速度順）         | `all`             | `--mode batch`                  |
-| `--batch-size <size>`         | バッチあたりのファイル数 (1-100)                              | `25`              | `--batch-size 10`               |
-| `--fallback`                  | 実行戦略のフォールバックを有効化                               | `true`            | `--fallback`                    |
-| `--no-fallback`               | 実行戦略のフォールバックを無効化                               | -                 | `--no-fallback`                 |
-| `--log-mode <mode>`           | ログモード: `normal`, `silent`, `debug`, `error-files-only`  | `normal`          | `--log-mode debug`              |
-| `--log-key <key>`             | BreakdownLoggerキー（デバッグモード必須）                      | -                 | `--log-key CI_DEBUG`           |
-| `--log-length <length>`       | BreakdownLogger長さ: `W`, `M`, `L`（デバッグモード必須）       | -                 | `--log-length M`                |
-| `--stop-on-first-error`       | 最初のエラーで実行を停止                                      | `false`           | `--stop-on-first-error`         |
-| `--continue-on-error`         | エラー後も実行を継続                                          | `true`            | `--continue-on-error`           |
-| `--allow-dirty`               | JSRチェックでdirtyな作業ディレクトリを許可                    | `false`           | `--allow-dirty`                 |
-| `--filter <pattern>`          | テストファイルをパターンでフィルタ                             | -                 | `--filter "*integration*"`     |
-| `--cwd <path>`                | 作業ディレクトリを指定                                        | カレントディレクトリ | `--cwd /path/to/project`        |
-| `--working-directory <path>`  | 作業ディレクトリを指定（`--cwd`のエイリアス）                  | カレントディレクトリ | `--working-directory ./src`     |
-| `--help, -h`                  | ヘルプメッセージを表示                                        | -                 | `--help`                        |
-| `--version, -v`               | バージョン情報を表示                                          | -                 | `--version`                     |
+| オプション                   | 説明                                                        | デフォルト値         | 例                          |
+| ---------------------------- | ----------------------------------------------------------- | -------------------- | --------------------------- |
+| `--mode <mode>`              | 実行モード: `all`, `batch`, `single-file`（実行速度順）     | `all`                | `--mode batch`              |
+| `--batch-size <size>`        | バッチあたりのファイル数 (1-100)                            | `25`                 | `--batch-size 10`           |
+| `--fallback`                 | 実行戦略のフォールバックを有効化                            | `true`               | `--fallback`                |
+| `--no-fallback`              | 実行戦略のフォールバックを無効化                            | -                    | `--no-fallback`             |
+| `--log-mode <mode>`          | ログモード: `normal`, `silent`, `debug`, `error-files-only` | `normal`             | `--log-mode debug`          |
+| `--log-key <key>`            | BreakdownLoggerキー（デバッグモード必須）                   | -                    | `--log-key CI_DEBUG`        |
+| `--log-length <length>`      | BreakdownLogger長さ: `W`, `M`, `L`（デバッグモード必須）    | -                    | `--log-length M`            |
+| `--stop-on-first-error`      | 最初のエラーで実行を停止                                    | `false`              | `--stop-on-first-error`     |
+| `--continue-on-error`        | エラー後も実行を継続                                        | `true`               | `--continue-on-error`       |
+| `--allow-dirty`              | JSRチェックでdirtyな作業ディレクトリを許可                  | `false`              | `--allow-dirty`             |
+| `--filter <pattern>`         | テストファイルをパターンでフィルタ                          | -                    | `--filter "*integration*"`  |
+| `--cwd <path>`               | 作業ディレクトリを指定                                      | カレントディレクトリ | `--cwd /path/to/project`    |
+| `--working-directory <path>` | 作業ディレクトリを指定（`--cwd`のエイリアス）               | カレントディレクトリ | `--working-directory ./src` |
+| `--help, -h`                 | ヘルプメッセージを表示                                      | -                    | `--help`                    |
+| `--version, -v`              | バージョン情報を表示                                        | -                    | `--version`                 |
 
 ### オプションの組み合わせ例
 
@@ -290,6 +290,7 @@ deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --
 ```bash
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --log-mode error-files-only
 ```
+
 ### Debug Mode (`--log-mode debug`)
 
 - 詳細な実行情報とタイムスタンプ
