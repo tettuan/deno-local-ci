@@ -2,7 +2,7 @@
   "version": "5",
   "specifiers": {
     "jsr:@std/internal@^1.0.9": "1.0.9",
-    "jsr:@std/path@1": "1.1.1",
+    "jsr:@std/path@^1.0.8": "1.1.1",
     "jsr:@tettuan/breakdownlogger@~0.1.10": "0.1.10"
   },
   "jsr": {
@@ -55,7 +55,7 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@std/path@1",
+      "jsr:@std/path@^1.0.8",
       "jsr:@tettuan/breakdownlogger@~0.1.10"
     ]
   }

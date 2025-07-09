@@ -16,7 +16,7 @@
     "url": "https://github.com/tettuan"
   },
   "imports": {
-    "@std/path": "jsr:@std/path@^1.0.0",
+    "@std/path": "jsr:@std/path@^1.0.8",
     "@tettuan/breakdownlogger": "jsr:@tettuan/breakdownlogger@^0.1.10"
   },
   "exports": {
@@ -62,6 +62,7 @@
     "ci-silent": "deno run --allow-read --allow-write --allow-run --allow-env mod.ts --log-mode silent",
     "ci-batch": "deno run --allow-read --allow-write --allow-run --allow-env mod.ts --mode batch --batch-size 10",
     "ci-all": "deno run --allow-read --allow-write --allow-run --allow-env mod.ts --mode all",
+    "update-lock": "rm -f deno.lock && deno cache mod.ts && deno cache $(find . -name '*.test.ts' | tr '\\n' ' ')",
     "publish": "deno publish"
   },
   "fmt": {

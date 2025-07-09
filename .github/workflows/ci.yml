@@ -15,16 +15,31 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        deno-version: [v1.x]
+        deno-version: [v2.x]
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Setup Deno
-        uses: denoland/setup-deno@v1
+        uses: denoland/setup-deno@v2
         with:
           deno-version: ${{ matrix.deno-version }}
+
+      - name: Verify Deno version
+        run: deno --version
+
+      - name: Clean and regenerate lock file
+        run: |
+          # Remove existing lock file
+          rm -f deno.lock
+          
+          # Cache dependencies to regenerate lock file
+          deno cache mod.ts
+          deno cache $(find . -name "*.test.ts" | tr '\n' ' ')
+          
+          # Verify lock file was created
+          ls -la deno.lock || echo "Warning: Lock file not generated"
 
       - name: Verify project structure
         run: |
@@ -51,16 +66,28 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        deno-version: [v1.40.x, v1.41.x, v1.42.x, v1.x]
+        deno-version: [v2.0.x, v2.1.x, v2.2.x, v2.3.x, v2.4.x, v2.x]
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Setup Deno ${{ matrix.deno-version }}
-        uses: denoland/setup-deno@v1
+        uses: denoland/setup-deno@v2
         with:
           deno-version: ${{ matrix.deno-version }}
+
+      - name: Verify Deno version
+        run: deno --version
+
+      - name: Clean and regenerate lock file
+        run: |
+          # Remove existing lock file
+          rm -f deno.lock
+          
+          # Cache dependencies to regenerate lock file for compatibility test
+          deno cache mod.ts
+          deno cache $(find . -name "*.test.ts" | tr '\n' ' ')
 
       - name: Type check
         run: deno check mod.ts
@@ -70,6 +97,11 @@ jobs:
           # Test that the module can be imported and basic functionality works
           deno eval "
           import { CLIParser } from './mod.ts';
-          const config = CLIParser.parse(['--help']);
-          console.log('✅ Module loads and basic functionality works');
+          const parseResult = CLIParser.parseArgs(['--help']);
+          if (parseResult.ok) {
+            console.log('✅ Module loads and basic functionality works');
+          } else {
+            console.log('❌ Basic functionality test failed');
+            Deno.exit(1);
+          }
           "
