@@ -3,17 +3,18 @@
 [![JSR](https://jsr.io/badges/@aidevtool/ci)](https://jsr.io/@aidevtool/ci)
 [![GitHub](https://img.shields.io/github/license/aidevtool/deno-local-ci)](https://github.com/aidevtool/deno-local-ci/blob/main/LICENSE)
 
-A comprehensive TypeScript-based CI runner for Deno projects with robust testing, formatting, and linting capabilities.
+A comprehensive TypeScript-based CI runner for Deno projects with robust testing, formatting, and
+linting capabilities.
 
 ## Features
 
-- 🚀 **Multiple Execution Modes**: Single-file, batch, and legacy modes for different project needs
-- 🛡️ **Type Safety**: Full TypeScript support with strict type checking
-- 📊 **Comprehensive Reporting**: Detailed error reporting and diagnostics
-- 🔧 **Flexible Configuration**: Customizable batch sizes and execution options
-- 🎯 **Error Handling**: Structured error categorization and fallback mechanisms
-- 📝 **Rich Logging**: Multiple log levels with debug and silent modes
-- ⚡ **Performance Optimized**: Memory-efficient processing for large test suites
+- **Multiple Execution Modes**: Single-file, batch, and legacy modes for different project needs
+- **Type Safety**: Full TypeScript support with strict type checking
+- **Comprehensive Reporting**: Detailed error reporting and diagnostics
+- **Flexible Configuration**: Customizable batch sizes and execution options
+- **Error Handling**: Structured error categorization and fallback mechanisms
+- **Rich Logging**: Multiple log levels with debug and silent modes
+- **Performance Optimized**: Memory-efficient processing for large test suites
 
 ## Installation
 
@@ -72,7 +73,7 @@ Deno.exit(success ? 0 : 1);
 ### Using Individual Components
 
 ```typescript
-import { Logger, ProcessRunner, FileSystem } from "@aidevtool/ci";
+import { FileSystem, Logger, ProcessRunner } from "@aidevtool/ci";
 
 // Use logger
 const logger = new Logger(true, false); // debug=true, silent=false

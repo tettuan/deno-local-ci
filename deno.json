@@ -49,7 +49,11 @@
     "fmt": "deno fmt",
     "lint": "deno lint",
     "check": "deno check mod.ts",
-    "ci": "deno task check && deno task test && deno task fmt --check && deno task lint",
+    "ci": "deno run --allow-read --allow-write --allow-run --allow-env mod.ts",
+    "ci-debug": "deno run --allow-read --allow-write --allow-run --allow-env mod.ts --log-mode debug --log-length M --log-key CI_LOCAL",
+    "ci-silent": "deno run --allow-read --allow-write --allow-run --allow-env mod.ts --log-mode silent",
+    "ci-batch": "deno run --allow-read --allow-write --allow-run --allow-env mod.ts --mode batch --batch-size 10",
+    "ci-all": "deno run --allow-read --allow-write --allow-run --allow-env mod.ts --mode all",
     "publish": "deno publish"
   },
   "fmt": {
