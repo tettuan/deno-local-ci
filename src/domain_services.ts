@@ -173,7 +173,9 @@ export class ErrorClassificationService {
 
   private static extractFileNames(output: string): string[] {
     const filePattern = /[\w\/\-\.]+\.tsx?/g;
-    return output.match(filePattern) || [];
+    const matches = output.match(filePattern) || [];
+    // 重複を排除してソートする
+    return [...new Set(matches)].sort();
   }
 }
 

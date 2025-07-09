@@ -152,7 +152,12 @@ export class CILogger {
       return;
     }
 
-    console.log("\nFiles with errors:");
+    // ファイル数の情報を追加
+    const fileCountText = files.length === 1 
+      ? "1 file with errors" 
+      : `${files.length} files with errors`;
+    
+    console.log(`\n${fileCountText}:`);
     files.forEach((file, index) => {
       const prefix = index === files.length - 1 ? "  └─" : "  ├─";
       console.log(`${prefix} ${file}`);
@@ -313,17 +318,23 @@ export class CILogger {
   }
 
   private extractErrorFiles(error: CIError): string[] {
+    let files: string[] = [];
+    
     switch (error.kind) {
       case "TypeCheckError":
       case "TestFailure":
       case "FormatError":
       case "LintError":
-        return error.files;
+        files = error.files;
+        break;
       case "JSRError":
       case "ConfigurationError":
       case "FileSystemError":
         return [];
     }
+    
+    // 重複を排除してソートする
+    return [...new Set(files)].sort();
   }
 
   private formatDuration(ms: number): string {
