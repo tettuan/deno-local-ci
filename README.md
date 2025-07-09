@@ -40,42 +40,76 @@ deno run --allow-read --allow-write --allow-run --allow-env https://raw.githubus
 
 ## 📖 Usage
 
-### Command Line Interface
+### Command Line Interface (Main Use Case)
+
+@aidevtool/ciは**CLIツールとしての使用がメインユースケース**です。プロジェクトのルートディレクトリで以下のコマンドを実行してください：
+
+#### 基本的な使用方法
 
 ```bash
-# Run with default settings (batch mode)
+# デフォルト設定で実行（全ファイル同時実行モード - 最高速）
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci
-
-# Run in single-file mode with debug output
-deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci \
-  --mode single-file --log-mode debug
-
-# Run in batch mode with custom batch size
-deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci \
-  --mode batch --batch-size 15
-
-# Run all files at once (legacy mode)
-deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci \
-  --mode all
-
-# Run in silent mode (minimal output)
-deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci \
-  --log-mode silent
-
-# Run with BreakdownLogger integration for detailed debugging
-deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci \
-  --log-mode debug --log-key CI_DEBUG --log-length M
 ```
 
-### Programmatic Usage
+#### 実行モード別の使用例
+
+```bash
+# 全ファイル同時実行：最高速（デフォルト）
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode all
+
+# バッチモード：パフォーマンスと安全性のバランス
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode batch --batch-size 10
+
+# シングルファイルモード：最も安全で詳細なエラー報告
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode single-file
+```
+
+#### ログレベル別の使用例
+
+```bash
+# 通常モード：標準的な出力
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --log-mode normal
+
+# サイレントモード：最小限の出力（CI/CD環境に最適）
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --log-mode silent
+
+# エラーファイルのみ表示：エラーの特定に最適
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --log-mode error-files-only
+
+# デバッグモード：詳細なログとBreakdownLogger統合
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --log-mode debug --log-key CI_DEBUG --log-length M
+```
+
+#### 高度な使用例
+
+```bash
+# フォールバックを無効化してバッチモードを強制
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode batch --no-fallback
+
+# 特定のパターンのテストファイルのみ実行
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --filter "*integration*"
+
+# 最初のエラーで停止
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --stop-on-first-error
+
+# 作業ディレクトリを指定
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --cwd /path/to/project
+
+# JSRチェックでdirtyな状態を許可
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --allow-dirty
+```
+
+### Programmatic Usage (Advanced)
+
+プログラムから直接使用する場合（高度な用途）：
 
 ```typescript
 import { CILogger, CIRunner, CLIParser, LogModeFactory, main } from "@aidevtool/ci";
 
-// Simple usage - run CI with default settings
+// シンプルな使用方法 - デフォルト設定でCI実行
 await main(["--mode", "batch"]);
 
-// Advanced usage - full control over CI configuration
+// 高度な使用方法 - CI設定の完全制御
 const parseResult = CLIParser.parseArgs(["--mode", "single-file", "--log-mode", "debug"]);
 if (parseResult.ok) {
   const configResult = CLIParser.buildCIConfig(parseResult.data);
@@ -129,19 +163,44 @@ const projectFiles = await discovery.discoverProjectFiles("./src");
 console.log(`Found ${projectFiles.testFiles.length} test files`);
 ```
 
-## 🔧 Command Line Options
+## 🔧 コマンドライン引数オプション
 
-| Option                       | Description                                                   | Default           |
-| ---------------------------- | ------------------------------------------------------------- | ----------------- |
-| `--mode <mode>`              | Execution mode: `single-file`, `batch`, or `all`              | `batch`           |
-| `--batch-size <size>`        | Number of files per batch (1-100)                             | `25`              |
-| `--log-mode <mode>`          | Logging mode: `normal`, `silent`, `error-files-only`, `debug` | `normal`          |
-| `--log-key <key>`            | BreakdownLogger key for debug mode                            | -                 |
-| `--log-length <length>`      | BreakdownLogger length: `S`, `M`, `L`                         | `M`               |
-| `--working-directory <path>` | Working directory for CI execution                            | Current directory |
-| `--no-fallback`              | Disable automatic fallback to single-file mode                | `false`           |
-| `--help, -h`                 | Show help message                                             | -                 |
-| `--version, -v`              | Show version information                                      | -                 |
+| オプション                     | 説明                                                         | デフォルト値       | 例                              |
+| ----------------------------- | ------------------------------------------------------------ | ----------------- | ------------------------------- |
+| `--mode <mode>`               | 実行モード: `all`, `batch`, `single-file`（実行速度順）         | `all`             | `--mode batch`                  |
+| `--batch-size <size>`         | バッチあたりのファイル数 (1-100)                              | `25`              | `--batch-size 10`               |
+| `--fallback`                  | 実行戦略のフォールバックを有効化                               | `true`            | `--fallback`                    |
+| `--no-fallback`               | 実行戦略のフォールバックを無効化                               | -                 | `--no-fallback`                 |
+| `--log-mode <mode>`           | ログモード: `normal`, `silent`, `debug`, `error-files-only`  | `normal`          | `--log-mode debug`              |
+| `--log-key <key>`             | BreakdownLoggerキー（デバッグモード必須）                      | -                 | `--log-key CI_DEBUG`           |
+| `--log-length <length>`       | BreakdownLogger長さ: `W`, `M`, `L`（デバッグモード必須）       | -                 | `--log-length M`                |
+| `--stop-on-first-error`       | 最初のエラーで実行を停止                                      | `false`           | `--stop-on-first-error`         |
+| `--continue-on-error`         | エラー後も実行を継続                                          | `true`            | `--continue-on-error`           |
+| `--allow-dirty`               | JSRチェックでdirtyな作業ディレクトリを許可                    | `false`           | `--allow-dirty`                 |
+| `--filter <pattern>`          | テストファイルをパターンでフィルタ                             | -                 | `--filter "*integration*"`     |
+| `--cwd <path>`                | 作業ディレクトリを指定                                        | カレントディレクトリ | `--cwd /path/to/project`        |
+| `--working-directory <path>`  | 作業ディレクトリを指定（`--cwd`のエイリアス）                  | カレントディレクトリ | `--working-directory ./src`     |
+| `--help, -h`                  | ヘルプメッセージを表示                                        | -                 | `--help`                        |
+| `--version, -v`               | バージョン情報を表示                                          | -                 | `--version`                     |
+
+### オプションの組み合わせ例
+
+```bash
+# 高速実行（CI/CD環境向け）
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode all --log-mode silent
+
+# 開発環境での詳細デバッグ
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode single-file --log-mode debug --log-key DEV --log-length L
+
+# 中規模プロジェクト向けバランス設定
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode batch --batch-size 15 --log-mode error-files-only
+
+# 特定のテストのみ実行（統合テスト）
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --filter "*integration*" --stop-on-first-error
+
+# dirtyな状態でのJSR互換性チェック
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --allow-dirty --log-mode normal
+```
 
 ## 🎯 CI Pipeline Stages
 
@@ -156,61 +215,164 @@ The CI runner executes the following stages in order:
 Each stage must pass before proceeding to the next. On failure, the pipeline stops and reports
 detailed error information.
 
-## 📊 Execution Modes
+## 📊 実行モード詳細
+
+### All Mode (`--mode all`) - デフォルト
+
+- すべてのテストを一度に実行
+- 最高速だがエラー分離が限定的
+- シンプルなプロジェクトや最終検証に最適
+- 失敗時はbatchモードにフォールバック
+- **推奨用途**: 高速チェック、小規模プロジェクト、CI/CD環境
+
+```bash
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode all
+```
+
+### Batch Mode (`--mode batch`)
+
+- 設定可能なバッチサイズでファイルをグループ化して処理
+- パフォーマンスとエラー分離のバランス
+- バッチ失敗時は自動的にsingle-fileモードにフォールバック
+- 大部分のプロジェクトに最適
+- **推奨用途**: 中〜大規模プロジェクト、バランス重視
+
+```bash
+# デフォルトバッチサイズ（25ファイル）
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode batch
+
+# カスタムバッチサイズ
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode batch --batch-size 10
+```
 
 ### Single-File Mode (`--mode single-file`)
 
-- Executes tests one file at a time
-- Maximum isolation and detailed error reporting
-- Best for debugging specific test failures
-- Slower but most reliable
+- テストファイルを1つずつ実行
+- 最大限の分離と詳細なエラー報告
+- 特定のテスト失敗のデバッグに最適
+- 実行速度は遅いが最も信頼性が高い
+- **推奨用途**: 開発環境、デバッグ、詳細なエラー調査
 
-### Batch Mode (`--mode batch`) - Default
+```bash
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode single-file
+```
 
-- Processes files in configurable batches
-- Balances performance with error isolation
-- Automatically falls back to single-file mode on batch failures
-- Optimal for most projects
+## 🔍 ログモード詳細
 
-### All Mode (`--mode all`)
+### Normal Mode (`--log-mode normal`) - デフォルト
 
-- Runs all tests in a single execution
-- Fastest execution but less error isolation
-- Best for simple projects or final validation
-- Falls back to batch mode on failures
+- 標準出力とプログレス表示
+- ステージ完了通知
+- エラーサマリーとファイルリスト
+- **推奨用途**: 対話的な開発環境
 
-## 🔍 Logging Modes
-
-### Normal Mode (Default)
-
-- Standard output with progress indicators
-- Stage completion notifications
-- Error summaries and file lists
+```bash
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --log-mode normal
+```
 
 ### Silent Mode (`--log-mode silent`)
 
-- Minimal output
-- Only critical errors and final results
-- Perfect for CI/CD environments
+- 最小限の出力
+- 重要なエラーと最終結果のみ
+- **推奨用途**: CI/CD環境、自動化スクリプト
+
+```bash
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --log-mode silent
+```
 
 ### Error Files Only Mode (`--log-mode error-files-only`)
 
-- Shows only files that contain errors
-- Compact error reporting
-- Good for quick issue identification
+- エラーを含むファイルのみ表示
+- コンパクトなエラー報告
+- 迅速な問題特定に最適
+- **推奨用途**: エラーの迅速な特定、レビュー
 
+```bash
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --log-mode error-files-only
+```
 ### Debug Mode (`--log-mode debug`)
 
-- Detailed execution information
-- BreakdownLogger integration with timestamps
-- Full configuration and state logging
-- Ideal for troubleshooting
+- 詳細な実行情報とタイムスタンプ
+- BreakdownLogger統合（`--log-key`と`--log-length`が必須）
+- 完全な設定とステート情報のログ
+- **推奨用途**: トラブルシューティング、詳細分析
 
-## 🌍 Environment Variables
+```bash
+# BreakdownLoggerとの統合を含む詳細デバッグ
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci \
+  --log-mode debug --log-key CI_DEBUG --log-length M
 
-- `DEBUG=true` - Enable debug logging (alternative to `--log-mode debug`)
-- `LOG_LEVEL=debug` - Enable debug logging
-- `CI_LOCAL_*` - BreakdownLogger environment variables (when using debug mode)
+# 短いメッセージでのデバッグ
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci \
+  --log-mode debug --log-key DEV --log-length W
+
+# 長いメッセージでの詳細デバッグ
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci \
+  --log-mode debug --log-key ANALYSIS --log-length L
+```
+
+## 🌍 環境変数
+
+CI実行時に以下の環境変数を使用できます：
+
+```bash
+# デバッグログの有効化（--log-mode debugの代替）
+export DEBUG=true
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci
+
+# ログレベルの設定
+export LOG_LEVEL=debug
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci
+
+# BreakdownLogger環境変数（デバッグモード使用時）
+export CI_LOCAL_KEY=MY_DEBUG_KEY
+export CI_LOCAL_LENGTH=M
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --log-mode debug --log-key CI_LOCAL --log-length M
+```
+
+## ⚡ 実践的な使用パターン
+
+### 開発ワークフロー
+
+```bash
+# 1. 開発中の迅速チェック
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode single-file --log-mode error-files-only
+
+# 2. コミット前の完全チェック
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode batch
+
+# 3. プルリクエスト前の最終確認
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode all --log-mode silent
+```
+
+### CI/CD環境
+
+```bash
+# GitHub Actions等での使用
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode batch --log-mode silent --no-fallback
+
+# Jenkins等での使用（詳細ログ）
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode batch --log-mode normal
+
+# Docker環境での使用
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode all --log-mode silent
+```
+
+### デバッグ・トラブルシューティング
+
+```bash
+# 特定の問題の詳細調査
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci \
+  --mode single-file --log-mode debug --log-key ISSUE_123 --log-length L
+
+# 特定パターンのテストのみデバッグ
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci \
+  --filter "*api*" --log-mode debug --log-key API_TEST --log-length M
+
+# エラー後即座に停止してデバッグ
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci \
+  --stop-on-first-error --log-mode debug --log-key FIRST_ERROR --log-length L
+```
 
 ## 🏗️ Architecture
 

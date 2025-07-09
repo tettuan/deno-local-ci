@@ -229,6 +229,9 @@ export class CLIParser {
       const modeResult = this.buildExecutionMode(options);
       if (!modeResult.ok) return modeResult;
       config.mode = modeResult.data;
+    } else {
+      // デフォルトはallモード（実行速度優先：All → Batch → Single-file）
+      config.mode = { kind: "all", projectDirectories: ["."] };
     }
 
     // フォールバック設定
@@ -267,7 +270,7 @@ USAGE:
     deno run [permissions] mod.ts [OPTIONS]
 
 OPTIONS:
-    --mode <MODE>              Execution mode: all, batch, single-file [default: single-file]
+    --mode <MODE>              Execution mode: all, batch, single-file [default: all]
     --batch-size <SIZE>        Batch size for batch mode (1-100) [default: 25]
     --fallback                 Enable execution strategy fallback [default: true]
     --no-fallback              Disable execution strategy fallback
