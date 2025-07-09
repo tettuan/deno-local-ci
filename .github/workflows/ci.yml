@@ -28,20 +28,19 @@ jobs:
       - name: Verify Deno version
         run: deno --version
 
-      - name: Clean and regenerate lock file
+      - name: Generate lock file for tests
         run: |
           # Remove existing lock file (cross-platform)
           deno eval "try { Deno.removeSync('deno.lock'); } catch { /* ignore if not exists */ }"
           
-          # Cache dependencies to regenerate lock file
-          deno cache mod.ts
+          # Cache test dependencies only
           deno cache src/cli_parser.test.ts src/domain_services.test.ts src/logger.test.ts src/types.test.ts tests/3_core/ci_integration.test.ts
-          
-          # Verify lock file was created (cross-platform)
-          deno eval "try { const stat = Deno.statSync('deno.lock'); console.log('✅ Lock file generated:', stat.size, 'bytes'); } catch { console.log('⚠️ Warning: Lock file not generated'); }"
 
       - name: Type check
-        run: deno check mod.ts
+        run: |
+          # Clean lock file before type check to avoid version conflicts
+          deno eval "try { Deno.removeSync('deno.lock'); } catch { /* ignore */ }"
+          deno check mod.ts
 
       - name: Run tests
         run: deno task test
@@ -53,4 +52,7 @@ jobs:
         run: deno lint
 
       - name: Test JSR publish (dry run)
-        run: deno publish --dry-run
+        run: |
+          # Clean lock file before publish to avoid version conflicts
+          deno eval "try { Deno.removeSync('deno.lock'); } catch { /* ignore */ }"
+          deno publish --dry-run
