@@ -1,6 +1,6 @@
 /**
  * Version information for @aidevtool/ci
- * 
+ *
  * This file contains the current version of the package.
  * The version should be kept in sync with deno.json and VERSION files.
  */
@@ -8,7 +8,7 @@
 /** Current version of @aidevtool/ci */
 export const VERSION = "0.0.1";
 
-/** 
+/**
  * Get version information for display
  * @returns Version string
  */

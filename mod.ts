@@ -63,7 +63,7 @@ export type {
  * console.log(`Full version: ${getFullVersion()}`);
  * ```
  */
-export { VERSION, getVersion, getFullVersion } from "./src/version.ts";
+export { getFullVersion, getVersion, VERSION } from "./src/version.ts";
 
 // === Main CI Runner ===
 
