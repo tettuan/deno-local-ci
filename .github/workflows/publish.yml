@@ -24,14 +24,17 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Deno
-        uses: denoland/setup-deno@v1
+        uses: denoland/setup-deno@v2
         with:
-          deno-version: v1.x
+          deno-version: v2.x
 
-      - name: Verify project structure
+      - name: Verify Deno version
+        run: deno --version
+
+      - name: Clean lock file before operations
         run: |
-          echo "Project structure:"
-          find . -type f -name "*.ts" -o -name "*.json" -o -name "*.md" | head -20
+          # Remove existing lock file to avoid version conflicts
+          deno eval "try { Deno.removeSync('deno.lock'); } catch { /* ignore if not exists */ }"
 
       - name: Type check
         run: deno check mod.ts
@@ -63,7 +66,13 @@ jobs:
           cat deno.json
 
       - name: Dry run publish
-        run: deno publish --dry-run
+        run: |
+          # Clean lock file before dry run to avoid version conflicts
+          deno eval "try { Deno.removeSync('deno.lock'); } catch { /* ignore */ }"
+          deno publish --dry-run
 
       - name: Publish to JSR
-        run: deno publish
+        run: |
+          # Clean lock file before publish to avoid version conflicts
+          deno eval "try { Deno.removeSync('deno.lock'); } catch { /* ignore */ }"
+          deno publish
