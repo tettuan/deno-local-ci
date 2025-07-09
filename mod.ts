@@ -50,6 +50,21 @@ export type {
   StageResult,
 } from "./src/types.ts";
 
+// === Version Information ===
+
+/**
+ * Version information for the package.
+ *
+ * @example
+ * ```typescript
+ * import { VERSION, getVersion, getFullVersion } from "@aidevtool/ci";
+ *
+ * console.log(`Current version: ${VERSION}`);
+ * console.log(`Full version: ${getFullVersion()}`);
+ * ```
+ */
+export { VERSION, getVersion, getFullVersion } from "./src/version.ts";
+
 // === Main CI Runner ===
 
 /**

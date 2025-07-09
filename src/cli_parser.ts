@@ -23,6 +23,7 @@ import {
   Result,
   ValidationError,
 } from "./types.ts";
+import { getFullVersion } from "./version.ts";
 
 /**
  * Command-line interface options configuration.
@@ -320,10 +321,10 @@ EXECUTION MODES:
   }
 
   /**
-   * バージョン情報表示
+   * Display version information
    */
   static showVersion(): void {
-    console.log("Deno Local CI v0.1.0");
+    console.log(getFullVersion());
   }
 
   // === プライベートメソッド ===

@@ -1,6 +1,6 @@
 {
   "name": "@aidevtool/ci",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "A comprehensive TypeScript-based CI runner for Deno projects with robust testing, formatting, linting, and type checking capabilities. Built with Domain-Driven Design principles and strong type safety.",
   "license": "MIT",
   "repository": {
