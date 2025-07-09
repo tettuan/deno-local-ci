@@ -57,7 +57,7 @@ export class ExecutionStrategyService {
 export class StageInternalFallbackService {
   static createFallbackStrategy(
     currentStrategy: ExecutionStrategy,
-    failedBatch?: { startIndex: number; endIndex: number; files: string[] },
+    _failedBatch?: { startIndex: number; endIndex: number; files: string[] },
   ): Result<ExecutionStrategy, ValidationError & { message: string }> {
     const nextMode = currentStrategy.getNextFallbackMode();
     if (!nextMode) {
@@ -67,23 +67,47 @@ export class StageInternalFallbackService {
       };
     }
 
-    if (
-      currentStrategy.mode.kind === "batch" &&
-      nextMode.kind === "single-file" &&
-      failedBatch
-    ) {
-      const fallbackMode: ExecutionMode = {
-        kind: "single-file",
-        stopOnFirstError: true,
-      };
-      return ExecutionStrategy.create(fallbackMode, currentStrategy.fallbackEnabled);
-    }
-
     return ExecutionStrategy.create(nextMode, currentStrategy.fallbackEnabled);
   }
 
-  static shouldRetryWithFallback(error: CIError, stage: CIStage): boolean {
-    return error.kind === "TestFailure" && stage.kind === "test-execution";
+  static shouldRetryWithFallback(error: CIError, _stage: CIStage): boolean {
+    // 全ての段階でフォールバックを許可
+    const retryableErrors = [
+      "TypeCheckError",
+      "TestFailure",
+      "LintError",
+      "FormatError",
+    ];
+    return retryableErrors.includes(error.kind);
+  }
+
+  /**
+   * 失敗したバッチから対象ファイルを抽出
+   */
+  static extractTargetFiles(
+    allFiles: string[],
+    currentStrategy: ExecutionStrategy,
+    fallbackStrategy: ExecutionStrategy,
+    failedBatch?: { startIndex: number; endIndex: number; files: string[] },
+  ): string[] {
+    // Batch → Single-file フォールバックの場合、失敗したバッチのファイルのみを対象とする
+    if (
+      currentStrategy.mode.kind === "batch" &&
+      fallbackStrategy.mode.kind === "single-file" &&
+      failedBatch
+    ) {
+      return failedBatch.files;
+    }
+
+    // All → Batch フォールバックの場合、全ファイルを対象とする
+    if (
+      currentStrategy.mode.kind === "all" &&
+      fallbackStrategy.mode.kind === "batch"
+    ) {
+      return allFiles;
+    }
+
+    return allFiles;
   }
 }
 

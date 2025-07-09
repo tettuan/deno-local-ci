@@ -305,7 +305,21 @@ export class CIRunner {
       throw new Error("Invalid stage type for type check");
     }
 
-    const result = await DenoCommandRunner.typeCheck(stage.files);
+    // 設定から実行戦略を決定
+    const strategyResult = ExecutionStrategyService.determineStrategy(this.config);
+    if (!strategyResult.ok) {
+      const failureResult: StageResult = {
+        kind: "failure",
+        stage,
+        error: strategyResult.error.message || "Strategy determination failed",
+        shouldStop: true,
+      };
+      this.logger.logStageResult(failureResult);
+      return failureResult;
+    }
+
+    const strategy = strategyResult.data;
+    const result = await this.executeTypeCheckWithStrategy(strategy, stage.files);
     const duration = performance.now() - startTime;
 
     if (result.ok && result.data.success) {
@@ -317,7 +331,28 @@ export class CIRunner {
       this.logger.logStageResult(successResult);
       return successResult;
     } else {
-      const errorOutput = result.ok ? result.data.stderr : result.error.message;
+      const errorOutput = result.ok
+        ? result.data.stderr
+        : (String(result.error) || "Unknown error");
+
+      // フォールバック試行
+      if (strategy.fallbackEnabled) {
+        // 失敗したバッチ情報を抽出（型安全に）
+        let failedBatch: { startIndex: number; endIndex: number; files: string[] } | undefined;
+        if ("failedBatch" in result) {
+          failedBatch = result.failedBatch;
+        }
+
+        // フォールバックを試行してエラーの詳細特定を行う
+        await this.attemptTypeCheckFallback(
+          strategy,
+          stage.files,
+          errorOutput,
+          failedBatch,
+        );
+        // フォールバックは詳細なエラー特定のみで、結果は常に失敗として扱う
+      }
+
       const failureResult: StageResult = {
         kind: "failure",
         stage,
@@ -407,20 +442,13 @@ export class CIRunner {
 
       // フォールバック試行
       if (stage.strategy.fallbackEnabled) {
-        const fallbackResult = await this.attemptTestFallback(
+        // フォールバックを試行してエラーの詳細特定を行う
+        await this.attemptTestFallback(
           stage.strategy,
           testFiles,
           errorOutput,
         );
-        if (fallbackResult.ok) {
-          const successResult: StageResult = {
-            kind: "success",
-            stage,
-            duration: performance.now() - startTime,
-          };
-          this.logger.logStageResult(successResult);
-          return successResult;
-        }
+        // フォールバックは詳細なエラー特定のみで、結果は常に失敗として扱う
       }
 
       const failureResult: StageResult = {
@@ -497,7 +525,21 @@ export class CIRunner {
       throw new Error("Invalid stage type for lint check");
     }
 
-    const result = await DenoCommandRunner.lint(stage.files);
+    // 設定から実行戦略を決定
+    const strategyResult = ExecutionStrategyService.determineStrategy(this.config);
+    if (!strategyResult.ok) {
+      const failureResult: StageResult = {
+        kind: "failure",
+        stage,
+        error: strategyResult.error.message,
+        shouldStop: true,
+      };
+      this.logger.logStageResult(failureResult);
+      return failureResult;
+    }
+
+    const strategy = strategyResult.data;
+    const result = await this.executeLintWithStrategy(strategy, stage.files);
     const duration = performance.now() - startTime;
 
     if (result.ok && result.data.success) {
@@ -510,6 +552,18 @@ export class CIRunner {
       return successResult;
     } else {
       const errorOutput = result.ok ? result.data.stderr : result.error.message;
+
+      // フォールバック試行
+      if (strategy.fallbackEnabled) {
+        // フォールバックを試行してエラーの詳細特定を行う
+        await this.attemptLintFallback(
+          strategy,
+          stage.files,
+          errorOutput,
+        );
+        // フォールバックは詳細なエラー特定のみで、結果は常に失敗として扱う
+      }
+
       const failureResult: StageResult = {
         kind: "failure",
         stage,
@@ -542,7 +596,21 @@ export class CIRunner {
       return failureResult;
     }
 
-    const result = await DenoCommandRunner.format(typeCheckFilesResult.data, {
+    // 設定から実行戦略を決定
+    const strategyResult = ExecutionStrategyService.determineStrategy(this.config);
+    if (!strategyResult.ok) {
+      const failureResult: StageResult = {
+        kind: "failure",
+        stage,
+        error: strategyResult.error.message,
+        shouldStop: true,
+      };
+      this.logger.logStageResult(failureResult);
+      return failureResult;
+    }
+
+    const strategy = strategyResult.data;
+    const result = await this.executeFormatWithStrategy(strategy, typeCheckFilesResult.data, {
       check: stage.checkOnly,
     });
     const duration = performance.now() - startTime;
@@ -557,6 +625,19 @@ export class CIRunner {
       return successResult;
     } else {
       const errorOutput = result.ok ? result.data.stderr : result.error.message;
+
+      // フォールバック試行
+      if (strategy.fallbackEnabled) {
+        // フォールバックを試行してエラーの詳細特定を行う
+        await this.attemptFormatFallback(
+          strategy,
+          typeCheckFilesResult.data,
+          errorOutput,
+          { check: stage.checkOnly },
+        );
+        // フォールバックは詳細なエラー特定のみで、結果は常に失敗として扱う
+      }
+
       const failureResult: StageResult = {
         kind: "failure",
         stage,
@@ -595,5 +676,200 @@ export class CIRunner {
       this.logger.logStageResult(failureResult);
       return failureResult;
     }
+  }
+
+  private async executeTypeCheckWithStrategy(
+    strategy: ExecutionStrategy,
+    files: string[],
+  ) {
+    switch (strategy.mode.kind) {
+      case "all":
+        return await DenoCommandRunner.typeCheck(files);
+
+      case "batch": {
+        const batchSize = strategy.mode.batchSize;
+        for (let i = 0; i < files.length; i += batchSize) {
+          const batch = files.slice(i, i + batchSize);
+          const result = await DenoCommandRunner.typeCheck(batch);
+          if (!result.ok || !result.data.success) {
+            // 失敗したバッチの情報を含める
+            return {
+              ...result,
+              failedBatch: { startIndex: i, endIndex: i + batchSize - 1, files: batch },
+            };
+          }
+        }
+        return await DenoCommandRunner.typeCheck([]); // 成功を示す空の実行
+      }
+
+      case "single-file": {
+        for (const file of files) {
+          const result = await DenoCommandRunner.typeCheck([file]);
+          if (!result.ok || !result.data.success) {
+            if (strategy.mode.stopOnFirstError) {
+              return result;
+            }
+          }
+        }
+        return await DenoCommandRunner.typeCheck([]); // 成功を示す空の実行
+      }
+    }
+  }
+
+  private async attemptTypeCheckFallback(
+    currentStrategy: ExecutionStrategy,
+    allFiles: string[],
+    originalError: string,
+    failedBatch?: { startIndex: number; endIndex: number; files: string[] },
+  ) {
+    const fallbackStrategyResult = StageInternalFallbackService.createFallbackStrategy(
+      currentStrategy,
+      failedBatch,
+    );
+
+    if (!fallbackStrategyResult.ok) {
+      return fallbackStrategyResult;
+    }
+
+    const fallbackStrategy = fallbackStrategyResult.data;
+    this.logger.logFallback(
+      currentStrategy.mode.kind,
+      fallbackStrategy.mode.kind,
+      originalError,
+    );
+
+    // 対象ファイルを決定
+    const targetFiles = StageInternalFallbackService.extractTargetFiles(
+      allFiles,
+      currentStrategy,
+      fallbackStrategy,
+      failedBatch,
+    );
+
+    return await this.executeTypeCheckWithStrategy(fallbackStrategy, targetFiles);
+  }
+
+  private async executeLintWithStrategy(
+    strategy: ExecutionStrategy,
+    files: string[],
+  ) {
+    switch (strategy.mode.kind) {
+      case "all":
+        return await DenoCommandRunner.lint(files);
+
+      case "batch": {
+        const batchSize = strategy.mode.batchSize;
+        for (let i = 0; i < files.length; i += batchSize) {
+          const batch = files.slice(i, i + batchSize);
+          const result = await DenoCommandRunner.lint(batch);
+          if (!result.ok || !result.data.success) {
+            const error = {
+              ...result,
+              failedBatch: { startIndex: i, endIndex: i + batchSize - 1, files: batch },
+            };
+            return error;
+          }
+        }
+        return await DenoCommandRunner.lint([]); // 成功を示す空の実行
+      }
+
+      case "single-file": {
+        for (const file of files) {
+          const result = await DenoCommandRunner.lint([file]);
+          if (!result.ok || !result.data.success) {
+            if (strategy.mode.stopOnFirstError) {
+              return result;
+            }
+          }
+        }
+        return await DenoCommandRunner.lint([]); // 成功を示す空の実行
+      }
+    }
+  }
+
+  private async attemptLintFallback(
+    currentStrategy: ExecutionStrategy,
+    files: string[],
+    originalError: string,
+  ) {
+    const fallbackStrategyResult = StageInternalFallbackService.createFallbackStrategy(
+      currentStrategy,
+    );
+
+    if (!fallbackStrategyResult.ok) {
+      return fallbackStrategyResult;
+    }
+
+    const fallbackStrategy = fallbackStrategyResult.data;
+    this.logger.logFallback(
+      currentStrategy.mode.kind,
+      fallbackStrategy.mode.kind,
+      originalError,
+    );
+
+    return await this.executeLintWithStrategy(fallbackStrategy, files);
+  }
+
+  private async executeFormatWithStrategy(
+    strategy: ExecutionStrategy,
+    files: string[],
+    options: { check?: boolean },
+  ) {
+    switch (strategy.mode.kind) {
+      case "all":
+        return await DenoCommandRunner.format(files, options);
+
+      case "batch": {
+        const batchSize = strategy.mode.batchSize;
+        for (let i = 0; i < files.length; i += batchSize) {
+          const batch = files.slice(i, i + batchSize);
+          const result = await DenoCommandRunner.format(batch, options);
+          if (!result.ok || !result.data.success) {
+            const error = {
+              ...result,
+              failedBatch: { startIndex: i, endIndex: i + batchSize - 1, files: batch },
+            };
+            return error;
+          }
+        }
+        return await DenoCommandRunner.format([], options); // 成功を示す空の実行
+      }
+
+      case "single-file": {
+        for (const file of files) {
+          const result = await DenoCommandRunner.format([file], options);
+          if (!result.ok || !result.data.success) {
+            if (strategy.mode.stopOnFirstError) {
+              return result;
+            }
+          }
+        }
+        return await DenoCommandRunner.format([], options); // 成功を示す空の実行
+      }
+    }
+  }
+
+  private async attemptFormatFallback(
+    currentStrategy: ExecutionStrategy,
+    files: string[],
+    originalError: string,
+    options: { check?: boolean },
+  ) {
+    const fallbackStrategyResult = StageInternalFallbackService.createFallbackStrategy(
+      currentStrategy,
+    );
+
+    if (!fallbackStrategyResult.ok) {
+      return fallbackStrategyResult;
+    }
+
+    const fallbackStrategy = fallbackStrategyResult.data;
+    this.logger.logFallback(
+      currentStrategy.mode.kind,
+      fallbackStrategy.mode.kind,
+      originalError,
+    );
+
+    return await this.executeFormatWithStrategy(fallbackStrategy, files, options);
   }
 }

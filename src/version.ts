@@ -2,7 +2,7 @@
  * Version information for @aidevtool/ci
  *
  * This file contains the current version of the package.
- * The version should be kept in sync with deno.json and VERSION files.
+ * The version should be kept in sync with deno.json.
  */
 
 /** Current version of @aidevtool/ci */
