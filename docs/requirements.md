@@ -15,13 +15,18 @@ local 環境で実行し、検知したい。
 
 以下の順序で段階的に実行し、各段階でエラーが発生した場合はそこで停止する：
 
-1. **Type Check** (Deno型チェック: `deno check`)
-2. **JSR Check** (JSR互換性チェック: `deno publish --dry-run`)
-3. **Test** (Denoテスト実行: `deno test`)
-4. **Lint** (Denoリント: `deno lint`)
-5. **Format** (Denoフォーマット: `deno fmt --check`)
+1. **Type Check** (Deno型チェック: `deno check [階層]`)
+2. **JSR Check** (JSR互換性チェック: `deno publish --dry-run`) ※階層指定時はスキップ
+3. **Test** (Denoテスト実行: `deno test [階層]`)
+4. **Lint** (Denoリント: `deno lint [階層]`)
+5. **Format** (Denoフォーマット: `deno fmt --check [階層]`)
 
 **停止ルール**: 各段階でエラーが発生した場合、次の段階には進まない。
+
+**階層指定**: `[階層]` の部分には、コマンドライン引数で指定されたディレクトリパスが適用される。
+階層が指定されない場合は、従来通りプロジェクト全体が対象となる。
+
+**JSR Check の特別ルール**: 階層指定時はJSR Checkをスキップする。これは、JSRパッケージの公開チェックがプロジェクト全体を対象とする性質上、部分的な階層チェックでは意味がないため。
 
 - Type Checkエラー → JSR Check実行されない
 - JSR Checkエラー → Test実行されない
@@ -36,28 +41,28 @@ local 環境で実行し、検知したい。
 
 - **動作**: 対象ファイル全体を一度に実行
 - **用途**: 通る見込みが高いときに最速で終わる
-- **Type Check**: プロジェクト全体の型チェック
-- **JSR Check**: パッケージ全体のJSR互換性チェック
-- **Test**: 全テストファイルを一度に実行
-- **Lint/Format**: 全対象ファイルを一括処理
+- **Type Check**: プロジェクト全体または指定階層全体の型チェック
+- **JSR Check**: パッケージ全体のJSR互換性チェック（階層指定時はスキップ）
+- **Test**: 全テストファイルまたは指定階層内の全テストファイルを一度に実行
+- **Lint/Format**: 全対象ファイルまたは指定階層内の全対象ファイルを一括処理
 
 #### **Batch モード**
 
 - **動作**: 指定サイズのバッチ単位で実行
 - **用途**: 大量処理で失敗の可能性があるときの効率重視
-- **Type Check**: ファイルグループ単位で型チェック
-- **JSR Check**: 部分的なJSR検証（メタデータ中心）
-- **Test**: テストファイルをバッチ単位で実行
-- **Lint/Format**: ファイルをバッチ単位で処理
+- **Type Check**: ファイルグループ単位で型チェック（階層内でバッチ化）
+- **JSR Check**: 部分的なJSR検証（階層指定時はスキップ）
+- **Test**: テストファイルをバッチ単位で実行（階層内でバッチ化）
+- **Lint/Format**: ファイルをバッチ単位で処理（階層内でバッチ化）
 
 #### **Single-file モード**
 
 - **動作**: ファイルを1つずつ順次実行
 - **用途**: デバッグ時の詳細調査（デフォルト）
-- **Type Check**: ファイル1つずつ型チェック
-- **JSR Check**: 個別ファイルのエクスポート検証
-- **Test**: テストファイル1つずつ実行
-- **Lint/Format**: ファイル1つずつ処理
+- **Type Check**: ファイル1つずつ型チェック（階層内のファイルのみ）
+- **JSR Check**: 個別ファイルのエクスポート検証（階層指定時はスキップ）
+- **Test**: テストファイル1つずつ実行（階層内のテストファイルのみ）
+- **Lint/Format**: ファイル1つずつ処理（階層内のファイルのみ）
 
 ### 段階内フォールバック機能
 
@@ -83,6 +88,7 @@ local 環境で実行し、検知したい。
 ### 実行例
 
 ```
+# 通常の全体実行
 Type Check: All → 失敗 → Batch → 失敗 → Single-file → ファイルA でエラー停止
 ↓ Type Checkでエラーのため、以降は実行されない
 JSR Check: 実行されない
@@ -92,6 +98,7 @@ Format: 実行されない
 ```
 
 ```
+# 通常の全体実行（成功パターン）
 Type Check: All → 成功
 ↓
 JSR Check: All → 成功
@@ -100,6 +107,36 @@ Test: All → 失敗 → Batch → 失敗 → Single-file → test_file_B.ts で
 ↓ Testでエラーのため、以降は実行されない
 Lint: 実行されない
 Format: 実行されない
+```
+
+```
+# 階層指定実行例: lib/ ディレクトリのみ対象
+コマンド: deno run main.ts lib/
+
+Type Check: deno check lib/ → All → 成功
+↓
+JSR Check: スキップ (階層指定時は実行されない)
+↓
+Test: deno test lib/ → All → 失敗 → Batch → 失敗 → Single-file → lib/service.test.ts でエラー停止
+↓ Testでエラーのため、以降は実行されない
+Lint: 実行されない
+Format: 実行されない
+```
+
+```
+# 階層指定実行例: src/core/ ディレクトリのみ対象（成功パターン）
+コマンド: deno run main.ts src/core/
+
+Type Check: deno check src/core/ → All → 成功
+↓
+JSR Check: スキップ (階層指定時は実行されない)
+↓
+Test: deno test src/core/ → All → 成功
+↓
+Lint: deno lint src/core/ → All → 成功
+↓
+Format: deno fmt --check src/core/ → All → 成功
+✅ 全段階完了
 ```
 
 ## 機能要件
@@ -124,11 +161,28 @@ Format: 実行されない
 - **Silent モード**: エラーのみ表示
 - **Error-files-only モード**: エラーファイル一覧のみ表示
 
+#### 階層指定機能
+
+- **階層指定実行**: 特定のディレクトリ階層のみを対象とした CI 実行
+- **使用例**: `deno run main.ts lib/` のように階層を指定
+- **各段階での階層適用**:
+  - **Type Check**: `deno check lib/` - 指定階層内のTypeScriptファイルの型チェック
+  - **JSR Check**: 階層指定時はスキップ（JSRパッケージの公開チェックは常にプロジェクト全体を対象とするため）
+  - **Test**: `deno test lib/` - 指定階層内のテストファイルのみ実行
+  - **Lint**: `deno lint lib/` - 指定階層内のファイルのリント
+  - **Format**: `deno fmt --check lib/` - 指定階層内のファイルのフォーマットチェック
+- **階層指定時の動作**:
+  - 階層が指定されない場合は従来通りプロジェクト全体を対象
+  - 階層指定時はファイル検索・実行対象を指定ディレクトリ以下に限定
+  - 相対パス・絶対パスの両方をサポート
+  - 存在しない階層を指定した場合は適切なエラーメッセージを表示
+
 #### 実行時の設定
 
 - コマンドライン引数による動的設定
   - バッチサイズの調整可能
   - 実行速度モード
+  - 階層指定（ディレクトリパス）
 - 環境変数による設定（LOG_LEVEL, LOG_LENGTH, LOG_KEY）
 - Deno標準のテストファイル絞り込み機能の利用（filter）
 
@@ -143,6 +197,7 @@ Format: 実行されない
 - テスト: *_test.ts | *.test.ts
 - 型チェック: *.ts | *.tsx | *.d.ts
 - 設定ファイル: deno.json | deno.lock | import_map.json
+- **階層指定時の対象**: 指定されたディレクトリ以下のファイルのみが対象となる
 
 ## 非機能要件
 
