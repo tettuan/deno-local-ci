@@ -35,7 +35,8 @@ import { getFullVersion } from "./version.ts";
  *   mode: "batch",
  *   batchSize: 25,
  *   logMode: "debug",
- *   fallbackEnabled: true
+ *   fallbackEnabled: true,
+ *   hierarchy: "./src/"  // 階層指定でsrc/ディレクトリのみを対象とする
  * };
  * ```
  */
@@ -58,6 +59,8 @@ export interface CLIOptions {
   allowDirty?: boolean;
   /** File filter pattern for selective execution */
   filter?: string;
+  /** Directory hierarchy for CI execution (null = entire project) */
+  hierarchy?: string;
   help?: boolean;
   version?: boolean;
   workingDirectory?: string;
@@ -74,123 +77,140 @@ export class CLIParser {
    */
   static parseArgs(args: string[]): Result<CLIOptions, ValidationError & { message: string }> {
     const options: CLIOptions = {};
+    const positionalArgs: string[] = [];
 
     for (let i = 0; i < args.length; i++) {
       const arg = args[i];
 
       try {
-        switch (arg) {
-          case "--mode": {
-            const modeValue = args[++i];
-            if (!["all", "batch", "single-file"].includes(modeValue)) {
-              return {
-                ok: false,
-                error: createError({
-                  kind: "PatternMismatch",
-                  value: modeValue,
-                  pattern: "all|batch|single-file",
-                }),
-              };
+        if (arg.startsWith("--")) {
+          // オプション引数の処理
+          switch (arg) {
+            case "--mode": {
+              const modeValue = args[++i];
+              if (!["all", "batch", "single-file"].includes(modeValue)) {
+                return {
+                  ok: false,
+                  error: createError({
+                    kind: "PatternMismatch",
+                    value: modeValue,
+                    pattern: "all|batch|single-file",
+                  }),
+                };
+              }
+              options.mode = modeValue as "all" | "batch" | "single-file";
+              break;
             }
-            options.mode = modeValue as "all" | "batch" | "single-file";
-            break;
-          }
 
-          case "--batch-size": {
-            const batchSizeStr = args[++i];
-            const batchSize = parseInt(batchSizeStr, 10);
-            if (isNaN(batchSize) || batchSize < 1 || batchSize > 100) {
-              return {
-                ok: false,
-                error: createError({
-                  kind: "OutOfRange",
-                  value: batchSizeStr,
-                  min: 1,
-                  max: 100,
-                }),
-              };
+            case "--batch-size": {
+              const batchSizeStr = args[++i];
+              const batchSize = parseInt(batchSizeStr, 10);
+              if (isNaN(batchSize) || batchSize < 1 || batchSize > 100) {
+                return {
+                  ok: false,
+                  error: createError({
+                    kind: "OutOfRange",
+                    value: batchSizeStr,
+                    min: 1,
+                    max: 100,
+                  }),
+                };
+              }
+              options.batchSize = batchSize;
+              break;
             }
-            options.batchSize = batchSize;
-            break;
-          }
 
-          case "--no-fallback":
-            options.fallbackEnabled = false;
-            break;
+            case "--no-fallback":
+              options.fallbackEnabled = false;
+              break;
 
-          case "--fallback":
-            options.fallbackEnabled = true;
-            break;
+            case "--fallback":
+              options.fallbackEnabled = true;
+              break;
 
-          case "--log-mode": {
-            const logModeValue = args[++i];
-            if (!["normal", "silent", "debug", "error-files-only"].includes(logModeValue)) {
-              return {
-                ok: false,
-                error: createError({
-                  kind: "PatternMismatch",
-                  value: logModeValue,
-                  pattern: "normal|silent|debug|error-files-only",
-                }),
-              };
+            case "--log-mode": {
+              const logModeValue = args[++i];
+              if (!["normal", "silent", "debug", "error-files-only"].includes(logModeValue)) {
+                return {
+                  ok: false,
+                  error: createError({
+                    kind: "PatternMismatch",
+                    value: logModeValue,
+                    pattern: "normal|silent|debug|error-files-only",
+                  }),
+                };
+              }
+              options.logMode = logModeValue as "normal" | "silent" | "debug" | "error-files-only";
+              break;
             }
-            options.logMode = logModeValue as "normal" | "silent" | "debug" | "error-files-only";
-            break;
-          }
 
-          case "--log-length": {
-            const logLengthValue = args[++i];
-            if (!["W", "M", "L"].includes(logLengthValue)) {
-              return {
-                ok: false,
-                error: createError({
-                  kind: "PatternMismatch",
-                  value: logLengthValue,
-                  pattern: "W|M|L",
-                }),
-              };
+            case "--log-length": {
+              const logLengthValue = args[++i];
+              if (!["W", "M", "L"].includes(logLengthValue)) {
+                return {
+                  ok: false,
+                  error: createError({
+                    kind: "PatternMismatch",
+                    value: logLengthValue,
+                    pattern: "W|M|L",
+                  }),
+                };
+              }
+              options.logLength = logLengthValue as "W" | "M" | "L";
+              break;
             }
-            options.logLength = logLengthValue as "W" | "M" | "L";
-            break;
-          }
 
-          case "--log-key":
-            options.logKey = args[++i];
-            break;
+            case "--log-key":
+              options.logKey = args[++i];
+              break;
 
-          case "--stop-on-first-error":
-            options.stopOnFirstError = true;
-            break;
+            case "--stop-on-first-error":
+              options.stopOnFirstError = true;
+              break;
 
-          case "--continue-on-error":
-            options.stopOnFirstError = false;
-            break;
+            case "--continue-on-error":
+              options.stopOnFirstError = false;
+              break;
 
-          case "--allow-dirty":
-            options.allowDirty = true;
-            break;
+            case "--allow-dirty":
+              options.allowDirty = true;
+              break;
 
-          case "--filter":
-            options.filter = args[++i];
-            break;
+            case "--filter":
+              options.filter = args[++i];
+              break;
 
-          case "--cwd":
-          case "--working-directory":
-            options.workingDirectory = args[++i];
-            break;
+            case "--hierarchy":
+            case "--dir": {
+              const hierarchyValue = args[++i];
+              if (!hierarchyValue || hierarchyValue.trim().length === 0) {
+                return {
+                  ok: false,
+                  error: createError({
+                    kind: "EmptyInput",
+                  }, "Hierarchy path cannot be empty"),
+                };
+              }
+              options.hierarchy = hierarchyValue;
+              break;
+            }
 
-          case "--help":
-          case "-h":
-            options.help = true;
-            break;
+            case "--cwd":
+            case "--working-directory":
+              options.workingDirectory = args[++i];
+              break;
 
-          case "--version":
-          case "-v":
-            options.version = true;
-            break;
+            case "--help":
+            case "-h":
+              options.help = true;
+              break;
 
-          default:
-            if (arg.startsWith("--")) {
+            case "--version":
+            case "-v":
+              options.version = true;
+              break;
+
+            default:
               return {
                 ok: false,
                 error: createError({
@@ -199,8 +219,10 @@ export class CLIParser {
                   pattern: "known CLI option",
                 }, `Unknown option: ${arg}`),
               };
-            }
-            break;
+          }
+        } else {
+          // 位置引数として階層指定を処理
+          positionalArgs.push(arg);
         }
       } catch (_error) {
         return {
@@ -211,6 +233,11 @@ export class CLIParser {
           }, `Error parsing argument: ${arg}`),
         };
       }
+    }
+
+    // 位置引数から階層を設定（最初の位置引数を階層として使用）
+    if (positionalArgs.length > 0 && !options.hierarchy) {
+      options.hierarchy = positionalArgs[0];
     }
 
     return { ok: true, data: options };
@@ -231,8 +258,15 @@ export class CLIParser {
       config.mode = modeResult.data;
     } else {
       // デフォルトはallモード（実行速度優先：All → Batch → Single-file）
-      config.mode = { kind: "all", projectDirectories: ["."] };
+      config.mode = {
+        kind: "all",
+        projectDirectories: ["."],
+        hierarchy: options.hierarchy || null,
+      };
     }
+
+    // 階層設定
+    config.hierarchy = options.hierarchy || null;
 
     // フォールバック設定
     config.fallbackEnabled = options.fallbackEnabled ?? true;
@@ -284,35 +318,47 @@ OPTIONS:
     --allow-dirty              Allow dirty working directory for JSR check
     --filter <PATTERN>         Filter test files by pattern
     
+    --hierarchy <PATH>         Target directory hierarchy for CI execution
+    --dir <PATH>               Alias for --hierarchy
     --cwd <PATH>               Working directory [default: current directory]
     --help, -h                 Show this help message
     --version, -v              Show version information
 
+HIERARCHY SPECIFICATION:
+    You can specify a target directory to limit CI execution scope:
+    
+    # Run CI only for files in src/ directory
+    deno run --allow-all mod.ts --hierarchy src/
+    
+    # Run CI only for files in lib/core/ directory  
+    deno run --allow-all mod.ts --hierarchy lib/core/
+
 EXAMPLES:
-    # Run with default settings (single-file mode)
+    # Run with default settings (all mode, entire project)
     deno run --allow-all mod.ts
 
-    # Run with batch mode and custom batch size
-    deno run --allow-all mod.ts --mode batch --batch-size 10
+    # Run only for src/ directory with batch mode
+    deno run --allow-all mod.ts --mode batch --hierarchy src/
 
-    # Run with debug logging
-    deno run --allow-all mod.ts --log-mode debug --log-length M --log-key CI_DEBUG
+    # Run with debug logging for specific directory
+    deno run --allow-all mod.ts --hierarchy lib/ --log-mode debug --log-length M --log-key CI_DEBUG
 
-    # Run with error files only
-    deno run --allow-all mod.ts --log-mode error-files-only
+    # Run with error files only for tests directory
+    deno run --allow-all mod.ts --hierarchy tests/ --log-mode error-files-only
 
-    # Run specific test pattern
-    deno run --allow-all mod.ts --filter "*integration*"
+    # Run only in the src/ directory
+    deno run --allow-all mod.ts --hierarchy ./src/
 
 CI STAGES:
     The CI pipeline executes the following stages in order:
-    1. Type Check     (deno check)
-    2. JSR Check      (deno publish --dry-run)
-    3. Test           (deno test)
-    4. Lint           (deno lint)
-    5. Format         (deno fmt --check)
+    1. Type Check     (deno check [hierarchy])
+    2. JSR Check      (deno publish --dry-run) - SKIPPED when hierarchy specified
+    3. Test           (deno test [hierarchy])
+    4. Lint           (deno lint [hierarchy])
+    5. Format         (deno fmt --check [hierarchy])
 
     Each stage stops execution on error. Test stage supports fallback strategies.
+    When hierarchy is specified, JSR Check is automatically skipped.
 
 EXECUTION MODES:
     all         - Execute all files at once (fastest when successful)
@@ -335,18 +381,20 @@ EXECUTION MODES:
   private static buildExecutionMode(
     options: CLIOptions,
   ): Result<ExecutionMode, ValidationError & { message: string }> {
+    const hierarchy = options.hierarchy || null;
+
     switch (options.mode) {
       case "all":
-        return { ok: true, data: { kind: "all", projectDirectories: ["."] } };
+        return { ok: true, data: { kind: "all", projectDirectories: ["."], hierarchy } };
 
       case "batch": {
         const batchSize = options.batchSize ?? 25;
-        return { ok: true, data: { kind: "batch", batchSize, failedBatchOnly: false } };
+        return { ok: true, data: { kind: "batch", batchSize, failedBatchOnly: false, hierarchy } };
       }
 
       case "single-file": {
         const stopOnFirstError = options.stopOnFirstError ?? true;
-        return { ok: true, data: { kind: "single-file", stopOnFirstError } };
+        return { ok: true, data: { kind: "single-file", stopOnFirstError, hierarchy } };
       }
 
       default:

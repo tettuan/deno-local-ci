@@ -27,10 +27,12 @@ export class ExecutionStrategyService {
     const defaultMode: ExecutionMode = {
       kind: "single-file",
       stopOnFirstError: true,
+      hierarchy: config.hierarchy || null,
     };
     return ExecutionStrategy.create(
       config.mode ?? defaultMode,
       config.fallbackEnabled ?? true,
+      config.hierarchy || null,
     );
   }
 
@@ -112,6 +114,41 @@ export class StageInternalFallbackService {
 }
 
 /**
+ * CI パイプライン管理サービス
+ */
+export class CIPipelineOrchestrator {
+  static createStage(
+    kind: CIStage["kind"],
+    files: string[] = [],
+    strategy?: ExecutionStrategy,
+    hierarchy?: string | null,
+  ): CIStage {
+    switch (kind) {
+      case "lockfile-init":
+        return { kind: "lockfile-init", action: "regenerate" };
+      case "type-check":
+        return { kind: "type-check", files, optimized: true, hierarchy: hierarchy || null };
+      case "jsr-check":
+        return { kind: "jsr-check", dryRun: true, allowDirty: true, hierarchy: hierarchy || null };
+      case "test-execution":
+        if (!strategy) {
+          throw new Error("ExecutionStrategy is required for test-execution stage");
+        }
+        return { kind: "test-execution", strategy, hierarchy: hierarchy || null };
+      case "lint-check":
+        return { kind: "lint-check", files, hierarchy: hierarchy || null };
+      case "format-check":
+        return { kind: "format-check", checkOnly: true, hierarchy: hierarchy || null };
+    }
+  }
+
+  static shouldStopPipeline(_error: CIError): boolean {
+    // すべてのエラーでパイプライン停止（要求事項に基づく）
+    return true;
+  }
+}
+
+/**
  * エラー分類サービス
  */
 export class ErrorClassificationService {
@@ -176,55 +213,6 @@ export class ErrorClassificationService {
     const matches = output.match(filePattern) || [];
     // 重複を排除してソートする
     return [...new Set(matches)].sort();
-  }
-}
-
-/**
- * CIパイプライン管理サービス
- */
-export class CIPipelineOrchestrator {
-  static readonly STAGE_ORDER: Array<CIStage["kind"]> = [
-    "type-check",
-    "jsr-check",
-    "test-execution",
-    "lint-check",
-    "format-check",
-  ];
-
-  static getNextStage(currentStage: CIStage["kind"]): CIStage["kind"] | null {
-    const currentIndex = this.STAGE_ORDER.indexOf(currentStage);
-    return currentIndex >= 0 && currentIndex < this.STAGE_ORDER.length - 1
-      ? this.STAGE_ORDER[currentIndex + 1]
-      : null;
-  }
-
-  static shouldStopPipeline(_error: CIError): boolean {
-    // すべてのエラーでパイプライン停止（要求事項に基づく）
-    return true;
-  }
-
-  static createStage(
-    kind: CIStage["kind"],
-    files: string[] = [],
-    strategy?: ExecutionStrategy,
-  ): CIStage {
-    switch (kind) {
-      case "lockfile-init":
-        return { kind: "lockfile-init", action: "regenerate" };
-      case "type-check":
-        return { kind: "type-check", files, optimized: true };
-      case "jsr-check":
-        return { kind: "jsr-check", dryRun: true, allowDirty: false };
-      case "test-execution":
-        if (!strategy) {
-          throw new Error("ExecutionStrategy is required for test-execution stage");
-        }
-        return { kind: "test-execution", strategy };
-      case "lint-check":
-        return { kind: "lint-check", files };
-      case "format-check":
-        return { kind: "format-check", checkOnly: true };
-    }
   }
 }
 

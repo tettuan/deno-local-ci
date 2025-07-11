@@ -15,7 +15,12 @@ import {
 } from "./types.ts";
 
 Deno.test("ExecutionStrategy - valid batch mode creation", () => {
-  const mode: ExecutionMode = { kind: "batch", batchSize: 25, failedBatchOnly: false };
+  const mode: ExecutionMode = {
+    kind: "batch",
+    batchSize: 25,
+    failedBatchOnly: false,
+    hierarchy: null,
+  };
   const result = ExecutionStrategy.create(mode, true);
 
   assertEquals(result.ok, true);
@@ -26,7 +31,12 @@ Deno.test("ExecutionStrategy - valid batch mode creation", () => {
 });
 
 Deno.test("ExecutionStrategy - invalid batch size (too small)", () => {
-  const mode: ExecutionMode = { kind: "batch", batchSize: 0, failedBatchOnly: false };
+  const mode: ExecutionMode = {
+    kind: "batch",
+    batchSize: 0,
+    failedBatchOnly: false,
+    hierarchy: null,
+  };
   const result = ExecutionStrategy.create(mode, true);
 
   assertEquals(result.ok, false);
@@ -37,7 +47,12 @@ Deno.test("ExecutionStrategy - invalid batch size (too small)", () => {
 });
 
 Deno.test("ExecutionStrategy - invalid batch size (too large)", () => {
-  const mode: ExecutionMode = { kind: "batch", batchSize: 101, failedBatchOnly: false };
+  const mode: ExecutionMode = {
+    kind: "batch",
+    batchSize: 101,
+    failedBatchOnly: false,
+    hierarchy: null,
+  };
   const result = ExecutionStrategy.create(mode, true);
 
   assertEquals(result.ok, false);
@@ -49,7 +64,7 @@ Deno.test("ExecutionStrategy - invalid batch size (too large)", () => {
 
 Deno.test("ExecutionStrategy - fallback mode progression", () => {
   // All → Batch
-  const allMode: ExecutionMode = { kind: "all", projectDirectories: ["."] };
+  const allMode: ExecutionMode = { kind: "all", projectDirectories: ["."], hierarchy: null };
   const allStrategy = ExecutionStrategy.create(allMode, true);
 
   if (allStrategy.ok) {
@@ -62,7 +77,12 @@ Deno.test("ExecutionStrategy - fallback mode progression", () => {
   }
 
   // Batch → Single-file
-  const batchMode: ExecutionMode = { kind: "batch", batchSize: 10, failedBatchOnly: false };
+  const batchMode: ExecutionMode = {
+    kind: "batch",
+    batchSize: 10,
+    failedBatchOnly: false,
+    hierarchy: null,
+  };
   const batchStrategy = ExecutionStrategy.create(batchMode, true);
 
   if (batchStrategy.ok) {
@@ -75,7 +95,11 @@ Deno.test("ExecutionStrategy - fallback mode progression", () => {
   }
 
   // Single-file → null (no more fallback)
-  const singleMode: ExecutionMode = { kind: "single-file", stopOnFirstError: true };
+  const singleMode: ExecutionMode = {
+    kind: "single-file",
+    stopOnFirstError: true,
+    hierarchy: null,
+  };
   const singleStrategy = ExecutionStrategy.create(singleMode, true);
 
   if (singleStrategy.ok) {
@@ -167,9 +191,9 @@ Deno.test("createError - custom message", () => {
 
 Deno.test("Discriminated Union - type safety", () => {
   const modes: ExecutionMode[] = [
-    { kind: "all", projectDirectories: ["."] },
-    { kind: "batch", batchSize: 50, failedBatchOnly: true },
-    { kind: "single-file", stopOnFirstError: false },
+    { kind: "all", projectDirectories: ["."], hierarchy: null },
+    { kind: "batch", batchSize: 50, failedBatchOnly: true, hierarchy: null },
+    { kind: "single-file", stopOnFirstError: false, hierarchy: null },
   ];
 
   for (const mode of modes) {

@@ -145,24 +145,29 @@ export class DenoCommandRunner {
   private constructor() {}
 
   /**
-   * Deno型チェック実行
+   * Deno型チェック実行（階層指定サポート）
    */
   static async typeCheck(
     files: string[] = [],
-    options: { remote?: boolean; noCheck?: boolean } = {},
+    options: { remote?: boolean; noCheck?: boolean; hierarchy?: string | null } = {},
   ): Promise<Result<ProcessResult, ValidationError & { message: string }>> {
     const args = ["check"];
 
     if (options.remote) args.push("--remote");
     if (options.noCheck) args.push("--no-check");
 
-    args.push(...files);
+    // 階層が指定されている場合は階層を追加、そうでなければファイルを追加
+    if (options.hierarchy) {
+      args.push(options.hierarchy);
+    } else {
+      args.push(...files);
+    }
 
     return await ProcessRunner.runCommand("deno", args);
   }
 
   /**
-   * Denoテスト実行
+   * Denoテスト実行（階層指定サポート）
    */
   static async test(
     files: string[] = [],
@@ -171,6 +176,7 @@ export class DenoCommandRunner {
       parallel?: boolean;
       coverage?: boolean;
       permissions?: string[];
+      hierarchy?: string | null;
     } = {},
   ): Promise<Result<ProcessResult, ValidationError & { message: string }>> {
     const args = ["test"];
@@ -196,17 +202,22 @@ export class DenoCommandRunner {
       args.push("--coverage");
     }
 
-    args.push(...files);
+    // 階層が指定されている場合は階層を追加、そうでなければファイルを追加
+    if (options.hierarchy) {
+      args.push(options.hierarchy);
+    } else {
+      args.push(...files);
+    }
 
     return await ProcessRunner.runCommand("deno", args);
   }
 
   /**
-   * Denoリント実行
+   * Denoリント実行（階層指定サポート）
    */
   static async lint(
     files: string[] = [],
-    options: { rules?: string[]; ignore?: string[] } = {},
+    options: { rules?: string[]; ignore?: string[]; hierarchy?: string | null } = {},
   ): Promise<Result<ProcessResult, ValidationError & { message: string }>> {
     const args = ["lint"];
 
@@ -220,17 +231,22 @@ export class DenoCommandRunner {
       }
     }
 
-    args.push(...files);
+    // 階層が指定されている場合は階層を追加、そうでなければファイルを追加
+    if (options.hierarchy) {
+      args.push(options.hierarchy);
+    } else {
+      args.push(...files);
+    }
 
     return await ProcessRunner.runCommand("deno", args);
   }
 
   /**
-   * Denoフォーマット実行
+   * Denoフォーマット実行（階層指定サポート）
    */
   static async format(
     files: string[] = [],
-    options: { check?: boolean; indentWidth?: number } = {},
+    options: { check?: boolean; indentWidth?: number; hierarchy?: string | null } = {},
   ): Promise<Result<ProcessResult, ValidationError & { message: string }>> {
     const args = ["fmt"];
 
@@ -242,17 +258,32 @@ export class DenoCommandRunner {
       args.push("--indent-width", options.indentWidth.toString());
     }
 
-    args.push(...files);
+    // 階層が指定されている場合は階層を追加、そうでなければファイルを追加
+    if (options.hierarchy) {
+      args.push(options.hierarchy);
+    } else {
+      args.push(...files);
+    }
 
     return await ProcessRunner.runCommand("deno", args);
   }
 
   /**
-   * JSR公開チェック
+   * JSR公開チェック（階層指定時はスキップされる）
    */
   static async jsrCheck(
-    options: { dryRun?: boolean; allowDirty?: boolean } = {},
+    options: { dryRun?: boolean; allowDirty?: boolean; hierarchy?: string | null } = {},
   ): Promise<Result<ProcessResult, ValidationError & { message: string }>> {
+    // 階層が指定されている場合はスキップ（要求事項に基づく）
+    if (options.hierarchy) {
+      return {
+        ok: false,
+        error: createError({
+          kind: "EmptyInput",
+        }, "JSR check is skipped when hierarchy is specified"),
+      };
+    }
+
     const args = ["publish"];
 
     if (options.dryRun !== false) {

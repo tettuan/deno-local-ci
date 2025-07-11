@@ -90,29 +90,31 @@ export type ValidationError =
  * const batchMode: ExecutionMode = {
  *   kind: "batch",
  *   batchSize: 25,
- *   failedBatchOnly: false
+ *   failedBatchOnly: false,
+ *   hierarchy: "./src/"
  * };
  *
  * // Single-file mode for maximum isolation and debugging
  * const singleFileMode: ExecutionMode = {
  *   kind: "single-file",
- *   stopOnFirstError: true
+ *   stopOnFirstError: true,
+ *   hierarchy: null  // null means project-wide execution
  * };
  * ```
  */
 export type ExecutionMode =
-  | { kind: "all"; projectDirectories: string[] }
-  | { kind: "batch"; batchSize: number; failedBatchOnly: boolean }
-  | { kind: "single-file"; stopOnFirstError: boolean };
+  | { kind: "all"; projectDirectories: string[]; hierarchy: string | null }
+  | { kind: "batch"; batchSize: number; failedBatchOnly: boolean; hierarchy: string | null }
+  | { kind: "single-file"; stopOnFirstError: boolean; hierarchy: string | null };
 
 // === CI Stage and Error Type Definitions ===
 export type CIStage =
   | { kind: "lockfile-init"; action: "regenerate" }
-  | { kind: "type-check"; files: string[]; optimized: boolean }
-  | { kind: "jsr-check"; dryRun: boolean; allowDirty: boolean }
-  | { kind: "test-execution"; strategy: ExecutionStrategy }
-  | { kind: "lint-check"; files: string[] }
-  | { kind: "format-check"; checkOnly: boolean };
+  | { kind: "type-check"; files: string[]; optimized: boolean; hierarchy: string | null }
+  | { kind: "jsr-check"; dryRun: boolean; allowDirty: boolean; hierarchy: string | null }
+  | { kind: "test-execution"; strategy: ExecutionStrategy; hierarchy: string | null }
+  | { kind: "lint-check"; files: string[]; hierarchy: string | null }
+  | { kind: "format-check"; checkOnly: boolean; hierarchy: string | null };
 
 export type StageResult =
   | { kind: "success"; stage: CIStage; duration: number }
@@ -164,6 +166,7 @@ export type CIConfig = {
   breakdownLoggerConfig?: BreakdownLoggerEnvConfig;
   stopOnFirstError?: boolean;
   allowDirty?: boolean;
+  hierarchy?: string | null; // 階層指定：null = プロジェクト全体, string = 指定ディレクトリ
 };
 
 // === Smart Constructor Classes ===
@@ -175,11 +178,13 @@ export class ExecutionStrategy {
   private constructor(
     readonly mode: ExecutionMode,
     readonly fallbackEnabled: boolean,
+    readonly hierarchy: string | null,
   ) {}
 
   static create(
     mode: ExecutionMode,
     fallbackEnabled = true,
+    hierarchy: string | null = null,
   ): Result<ExecutionStrategy, ValidationError & { message: string }> {
     if (mode.kind === "batch" && (mode.batchSize < 1 || mode.batchSize > 100)) {
       return {
@@ -192,18 +197,41 @@ export class ExecutionStrategy {
         }),
       };
     }
-    return { ok: true, data: new ExecutionStrategy(mode, fallbackEnabled) };
+
+    // 階層が指定されている場合、modeにも階層情報を設定
+    const updatedMode: ExecutionMode = { ...mode, hierarchy };
+
+    return { ok: true, data: new ExecutionStrategy(updatedMode, fallbackEnabled, hierarchy) };
   }
 
   getNextFallbackMode(): ExecutionMode | null {
     switch (this.mode.kind) {
       case "all":
-        return { kind: "batch", batchSize: 25, failedBatchOnly: false };
+        return { kind: "batch", batchSize: 25, failedBatchOnly: false, hierarchy: this.hierarchy };
       case "batch":
-        return { kind: "single-file", stopOnFirstError: true };
+        return { kind: "single-file", stopOnFirstError: true, hierarchy: this.hierarchy };
       case "single-file":
         return null;
     }
+  }
+
+  /**
+   * 階層指定時のコマンド引数生成
+   * 階層が指定されている場合、各Denoコマンドに階層パスを追加
+   */
+  getCommandArgs(baseCommand: string[]): string[] {
+    if (this.hierarchy === null) {
+      return baseCommand;
+    }
+    return [...baseCommand, this.hierarchy];
+  }
+
+  /**
+   * JSRチェックをスキップするべきかどうかの判定
+   * 階層指定時はJSRチェックをスキップする（要求事項に基づく）
+   */
+  shouldSkipJSRCheck(): boolean {
+    return this.hierarchy !== null;
   }
 }
 

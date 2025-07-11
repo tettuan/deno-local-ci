@@ -94,6 +94,7 @@ Deno.test("CILogger - log stage start and result (normal mode)", () => {
       kind: "type-check",
       files: ["src/main.ts", "src/utils.ts"],
       optimized: true,
+      hierarchy: null,
     };
 
     // ログ出力テスト（実際の出力は目視確認用）
@@ -170,6 +171,7 @@ Deno.test("CILogger - silent mode suppresses most logs", () => {
     const stage: CIStage = {
       kind: "lint-check",
       files: ["src/main.ts"],
+      hierarchy: null,
     };
 
     // サイレントモードでは開始ログは出力されない

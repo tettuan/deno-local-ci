@@ -132,7 +132,12 @@ export class CIRunner {
       // ファイル発見
       const filesResult = await this.discoverFiles();
       if (!filesResult.ok) {
-        const errorStage: CIStage = { kind: "type-check", files: [], optimized: false };
+        const errorStage: CIStage = {
+          kind: "type-check",
+          files: [],
+          optimized: false,
+          hierarchy: null,
+        };
         const failureResult: StageResult = {
           kind: "failure",
           stage: errorStage,
@@ -223,11 +228,14 @@ export class CIRunner {
       typeCheckFiles: string[];
     }, ValidationError & { message: string }>
   > {
-    const testFilesResult = await ProjectFileDiscovery.findTestFiles(this.projectRoot);
+    // 階層が指定されている場合、その階層のみを対象とする
+    const targetDirectory = this.config.hierarchy ? this.config.hierarchy : this.projectRoot;
+
+    const testFilesResult = await ProjectFileDiscovery.findTestFiles(targetDirectory);
     if (!testFilesResult.ok) return testFilesResult;
 
     const typeCheckFilesResult = await ProjectFileDiscovery.findTypeScriptFiles(
-      this.projectRoot,
+      targetDirectory,
       false,
     );
     if (!typeCheckFilesResult.ok) return typeCheckFilesResult;
@@ -243,24 +251,37 @@ export class CIRunner {
 
   private createStages(testFiles: string[], typeCheckFiles: string[]): CIStage[] {
     const stages: CIStage[] = [];
+    const hierarchy = this.config.hierarchy;
 
     // Type Check段階
-    stages.push(CIPipelineOrchestrator.createStage("type-check", typeCheckFiles));
+    stages.push(
+      CIPipelineOrchestrator.createStage("type-check", typeCheckFiles, undefined, hierarchy),
+    );
 
-    // JSR Check段階
-    stages.push(CIPipelineOrchestrator.createStage("jsr-check"));
+    // JSR Check段階 - 階層指定時はスキップ
+    if (!hierarchy) {
+      stages.push(CIPipelineOrchestrator.createStage("jsr-check", [], undefined, hierarchy));
+    } else {
+      this.logger.logDebug("JSR Check skipped due to hierarchy specification", { hierarchy });
+    }
 
     // Test実行段階
     const strategyResult = ExecutionStrategyService.determineStrategy(this.config);
     if (strategyResult.ok && testFiles.length > 0) {
-      stages.push(CIPipelineOrchestrator.createStage("test-execution", [], strategyResult.data));
+      stages.push(
+        CIPipelineOrchestrator.createStage("test-execution", [], strategyResult.data, hierarchy),
+      );
     }
 
     // Lint段階
-    stages.push(CIPipelineOrchestrator.createStage("lint-check", typeCheckFiles));
+    stages.push(
+      CIPipelineOrchestrator.createStage("lint-check", typeCheckFiles, undefined, hierarchy),
+    );
 
     // Format段階
-    stages.push(CIPipelineOrchestrator.createStage("format-check", typeCheckFiles));
+    stages.push(
+      CIPipelineOrchestrator.createStage("format-check", typeCheckFiles, undefined, hierarchy),
+    );
 
     return stages;
   }
@@ -372,6 +393,7 @@ export class CIRunner {
     const result = await DenoCommandRunner.jsrCheck({
       dryRun: stage.dryRun,
       allowDirty: stage.allowDirty || this.config.allowDirty,
+      hierarchy: stage.hierarchy,
     });
 
     const duration = performance.now() - startTime;
@@ -402,7 +424,9 @@ export class CIRunner {
       throw new Error("Invalid stage type for test execution");
     }
 
-    const testFilesResult = await ProjectFileDiscovery.findTestFiles(this.projectRoot);
+    // 階層が指定されている場合は階層内のテストファイルを検索
+    const targetDirectory = stage.hierarchy || this.projectRoot;
+    const testFilesResult = await ProjectFileDiscovery.findTestFiles(targetDirectory);
     if (!testFilesResult.ok) {
       const failureResult: StageResult = {
         kind: "failure",
@@ -419,14 +443,14 @@ export class CIRunner {
       const skippedResult: StageResult = {
         kind: "skipped",
         stage,
-        reason: "No test files found",
+        reason: `No test files found in ${targetDirectory}`,
       };
       this.logger.logStageResult(skippedResult);
       return skippedResult;
     }
 
-    // 実行戦略に基づくテスト実行
-    const result = await this.executeTestsWithStrategy(stage.strategy, testFiles);
+    // 実行戦略に基づくテスト実行（階層情報を含む）
+    const result = await this.executeTestsWithStrategy(stage.strategy, testFiles, stage.hierarchy);
     const duration = performance.now() - startTime;
 
     if (result.ok && result.data.success) {
@@ -465,34 +489,35 @@ export class CIRunner {
   private async executeTestsWithStrategy(
     strategy: ExecutionStrategy,
     testFiles: string[],
+    hierarchy?: string | null,
   ) {
     switch (strategy.mode.kind) {
       case "all":
-        return await DenoCommandRunner.test(testFiles);
+        return await DenoCommandRunner.test(testFiles, { hierarchy });
 
       case "batch": {
         // バッチ実行（簡略実装）
         const batchSize = strategy.mode.batchSize;
         for (let i = 0; i < testFiles.length; i += batchSize) {
           const batch = testFiles.slice(i, i + batchSize);
-          const result = await DenoCommandRunner.test(batch);
+          const result = await DenoCommandRunner.test(batch, { hierarchy });
           if (!result.ok || !result.data.success) {
             return result;
           }
         }
-        return await DenoCommandRunner.test([]); // 成功を示す空の実行
+        return await DenoCommandRunner.test([], { hierarchy }); // 成功を示す空の実行
       }
 
       case "single-file": {
         for (const file of testFiles) {
-          const result = await DenoCommandRunner.test([file]);
+          const result = await DenoCommandRunner.test([file], { hierarchy });
           if (!result.ok || !result.data.success) {
             if (strategy.mode.stopOnFirstError) {
               return result;
             }
           }
         }
-        return await DenoCommandRunner.test([]); // 成功を示す空の実行
+        return await DenoCommandRunner.test([], { hierarchy }); // 成功を示す空の実行
       }
     }
   }
@@ -501,6 +526,7 @@ export class CIRunner {
     currentStrategy: ExecutionStrategy,
     testFiles: string[],
     originalError: string,
+    hierarchy?: string | null,
   ) {
     const fallbackStrategyResult = StageInternalFallbackService.createFallbackStrategy(
       currentStrategy,
@@ -517,7 +543,7 @@ export class CIRunner {
       originalError,
     );
 
-    return await this.executeTestsWithStrategy(fallbackStrategy, testFiles);
+    return await this.executeTestsWithStrategy(fallbackStrategy, testFiles, hierarchy);
   }
 
   private async executeLint(stage: CIStage, startTime: number): Promise<StageResult> {

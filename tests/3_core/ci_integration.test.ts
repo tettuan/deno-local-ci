@@ -54,6 +54,7 @@ Deno.test("CI Runner - silent mode logging verification", () => {
         kind: "type-check",
         files: ["test.ts"],
         optimized: true,
+        hierarchy: null,
       });
 
       // ログが呼ばれていないことを確認
