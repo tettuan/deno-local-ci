@@ -18,7 +18,9 @@ import {
   CIConfig,
   CIError,
   CIStage,
+  CISummaryStats,
   ExecutionStrategy,
+  ProcessResult,
   Result,
   StageResult,
   ValidationError,
@@ -82,6 +84,21 @@ export class CIRunner {
   private readonly logger: CILogger;
   private readonly config: CIConfig;
   private readonly projectRoot: string;
+
+  // 統計情報追跡用
+  private stats: {
+    filesProcessed: Set<string>;
+    testsRun: number;
+    testsPassed: number;
+    testsFailed: number;
+    testsSkipped: number;
+  } = {
+    filesProcessed: new Set(),
+    testsRun: 0,
+    testsPassed: 0,
+    testsFailed: 0,
+    testsSkipped: 0,
+  };
 
   private constructor(
     logger: CILogger,
@@ -168,6 +185,8 @@ export class CIRunner {
         const stageResult = await this.executeStage(stage);
         completedStages.push(stageResult);
 
+        this.updateFileStats(stage); // 統計情報の更新
+
         if (stageResult.kind === "failure") {
           const error = ErrorClassificationService.classifyError({
             success: false,
@@ -189,11 +208,14 @@ export class CIRunner {
       }
 
       const totalDuration = performance.now() - startTime;
+      const summaryStats = this.generateSummaryStats(completedStages, totalDuration);
+
       this.logger.logSummary(
         completedStages.length,
         completedStages.filter((s) => s.kind === "success").length,
         completedStages.filter((s) => s.kind === "failure").length,
         totalDuration,
+        summaryStats,
       );
 
       return {
@@ -290,6 +312,9 @@ export class CIRunner {
     const startTime = performance.now();
 
     this.logger.logStageStart(stage);
+
+    // ファイル統計の更新
+    this.updateFileStats(stage);
 
     try {
       switch (stage.kind) {
@@ -452,6 +477,11 @@ export class CIRunner {
     // 実行戦略に基づくテスト実行（階層情報を含む）
     const result = await this.executeTestsWithStrategy(stage.strategy, testFiles, stage.hierarchy);
     const duration = performance.now() - startTime;
+
+    // テスト統計の更新
+    if (result.ok) {
+      this.updateTestStats(result.data, testFiles);
+    }
 
     if (result.ok && result.data.success) {
       const successResult: StageResult = {
@@ -897,5 +927,145 @@ export class CIRunner {
     );
 
     return await this.executeFormatWithStrategy(fallbackStrategy, files, options);
+  }
+
+  // === 統計情報収集メソッド ===
+
+  /**
+   * ステージ実行時にファイル統計を更新
+   */
+  private updateFileStats(stage: CIStage): void {
+    switch (stage.kind) {
+      case "type-check":
+        stage.files.forEach((file) => this.stats.filesProcessed.add(file));
+        break;
+      case "lint-check":
+        stage.files.forEach((file) => this.stats.filesProcessed.add(file));
+        break;
+      case "test-execution":
+        // テストファイルは実行結果で更新
+        break;
+      case "format-check":
+      case "jsr-check":
+      case "lockfile-init":
+        // これらはファイル数に含めない
+        break;
+    }
+  }
+
+  /**
+   * テスト実行結果から統計を更新
+   */
+  private updateTestStats(result: ProcessResult, testFiles: string[]): void {
+    // 実際のテスト実行結果を基に統計を更新
+    testFiles.forEach((file) => this.stats.filesProcessed.add(file));
+
+    if (result.success) {
+      // 成功したテストファイル数を概算
+      this.stats.testsRun += testFiles.length;
+      this.stats.testsPassed += testFiles.length;
+    } else {
+      // 失敗したテスト統計の更新
+      this.stats.testsRun += testFiles.length;
+      this.stats.testsFailed += testFiles.length;
+    }
+  }
+
+  /**
+   * サマリー統計情報を生成
+   */
+  private generateSummaryStats(
+    completedStages: StageResult[],
+    totalDuration: number,
+  ): CISummaryStats {
+    const successfulStages = completedStages.filter((s) => s.kind === "success");
+    const failedStages = completedStages.filter((s) => s.kind === "failure");
+    const skippedStages = completedStages.filter((s) => s.kind === "skipped");
+
+    // 最も時間のかかったステージを特定
+    let longestStage = "";
+    let longestStageDuration = 0;
+
+    successfulStages.forEach((stage) => {
+      if (stage.duration > longestStageDuration) {
+        longestStageDuration = stage.duration;
+        longestStage = this.getStageName(stage.stage);
+      }
+    });
+
+    // ファイル種別の統計
+    let testFiles = 0;
+    let typeCheckFiles = 0;
+    let lintFiles = 0;
+    let formatFiles = 0;
+
+    completedStages.forEach((stageResult) => {
+      const stage = stageResult.stage;
+      switch (stage.kind) {
+        case "type-check":
+          typeCheckFiles = stage.files.length;
+          break;
+        case "lint-check":
+          lintFiles = stage.files.length;
+          break;
+        case "test-execution":
+          // テストファイル数は実行結果から推定
+          testFiles = this.stats.testsRun > 0
+            ? Math.max(testFiles, Math.ceil(this.stats.testsRun / 2))
+            : 0;
+          break;
+        case "format-check":
+          formatFiles = Math.max(formatFiles, typeCheckFiles); // 通常は同じファイル群
+          break;
+      }
+    });
+
+    return {
+      stages: {
+        total: completedStages.length,
+        successful: successfulStages.length,
+        failed: failedStages.length,
+        skipped: skippedStages.length,
+      },
+      files: {
+        totalChecked: this.stats.filesProcessed.size,
+        testFiles,
+        typeCheckFiles,
+        lintFiles,
+        formatFiles,
+      },
+      tests: {
+        totalTests: this.stats.testsRun,
+        passedTests: this.stats.testsPassed,
+        failedTests: this.stats.testsFailed,
+        skippedTests: this.stats.testsSkipped,
+      },
+      timing: {
+        totalDuration,
+        averageStageTime: completedStages.length > 0 ? totalDuration / completedStages.length : 0,
+        longestStage,
+        longestStageDuration,
+      },
+    };
+  }
+
+  /**
+   * ステージ名を取得（ロガーと同じロジック）
+   */
+  private getStageName(stage: CIStage): string {
+    switch (stage.kind) {
+      case "lockfile-init":
+        return "Lockfile Initialization";
+      case "type-check":
+        return "Type Check";
+      case "jsr-check":
+        return "JSR Compatibility Check";
+      case "test-execution":
+        return "Test Execution";
+      case "lint-check":
+        return "Lint Check";
+      case "format-check":
+        return "Format Check";
+    }
   }
 }

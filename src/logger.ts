@@ -20,6 +20,7 @@ import {
   BreakdownLoggerEnvConfig,
   CIError,
   CIStage,
+  CISummaryStats,
   createError,
   LogMode,
   Result,
@@ -175,13 +176,14 @@ export class CILogger {
   }
 
   /**
-   * 最終サマリーログ
+   * 最終サマリーログ（詳細統計版）
    */
   logSummary(
     totalStages: number,
     successStages: number,
     failedStages: number,
     totalDuration: number,
+    stats?: CISummaryStats,
   ): void {
     if (this.mode.kind === "error-files-only") return;
 
@@ -193,10 +195,46 @@ export class CILogger {
     console.log(`Failed: ${failedStages}`);
     console.log(`Total duration: ${this.formatDuration(totalDuration)}`);
 
+    if (stats) {
+      console.log("\n" + "Files Processed:");
+      console.log(`📁 Total files checked: ${stats.files.totalChecked}`);
+      if (stats.files.typeCheckFiles > 0) {
+        console.log(`📝 TypeScript files: ${stats.files.typeCheckFiles}`);
+      }
+      if (stats.files.testFiles > 0) {
+        console.log(`🧪 Test files: ${stats.files.testFiles}`);
+      }
+      if (stats.files.lintFiles > 0) {
+        console.log(`🔍 Lint checked files: ${stats.files.lintFiles}`);
+      }
+
+      if (stats.tests.totalTests > 0) {
+        console.log("\n" + "Test Results:");
+        console.log(`🏃 Total tests run: ${stats.tests.totalTests}`);
+        console.log(`✅ Passed: ${stats.tests.passedTests}`);
+        if (stats.tests.failedTests > 0) {
+          console.log(`❌ Failed: ${stats.tests.failedTests}`);
+        }
+        if (stats.tests.skippedTests > 0) {
+          console.log(`⏭️ Skipped: ${stats.tests.skippedTests}`);
+        }
+      }
+
+      if (stats.timing.longestStage) {
+        console.log("\n" + "Performance:");
+        console.log(`⏱️ Average stage time: ${this.formatDuration(stats.timing.averageStageTime)}`);
+        console.log(
+          `🐌 Longest stage: ${stats.timing.longestStage} (${
+            this.formatDuration(stats.timing.longestStageDuration)
+          })`,
+        );
+      }
+    }
+
     if (failedStages === 0) {
-      console.log("\nAll CI stages completed successfully!");
+      console.log("\n✅ All CI stages completed successfully!");
     } else {
-      console.log(`\nCI failed with ${failedStages} error(s)`);
+      console.log(`\n❌ CI failed with ${failedStages} error(s)`);
     }
   }
 

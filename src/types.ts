@@ -303,3 +303,36 @@ const getDefaultMessage = (error: ValidationError): string => {
       return `File system error in ${error.operation} at ${error.path}: ${error.cause}`;
   }
 };
+
+// === CI実行サマリー統計情報 ===
+export interface CISummaryStats {
+  /** ステージ統計 */
+  stages: {
+    total: number;
+    successful: number;
+    failed: number;
+    skipped: number;
+  };
+  /** ファイル統計 */
+  files: {
+    totalChecked: number;
+    testFiles: number;
+    typeCheckFiles: number;
+    lintFiles: number;
+    formatFiles: number;
+  };
+  /** テスト実行統計 */
+  tests: {
+    totalTests: number;
+    passedTests: number;
+    failedTests: number;
+    skippedTests: number;
+  };
+  /** 実行時間統計 */
+  timing: {
+    totalDuration: number;
+    averageStageTime: number;
+    longestStage: string;
+    longestStageDuration: number;
+  };
+}

@@ -156,8 +156,28 @@ Deno.test("CILogger - log summary", () => {
   if (loggerResult.ok) {
     const logger = loggerResult.data;
 
-    // サマリー表示テスト
+    // サマリー表示テスト（基本版）
     logger.logSummary(5, 3, 2, 45000);
+
+    // サマリー表示テスト（詳細統計版）
+    const detailedStats = {
+      stages: { total: 5, successful: 3, failed: 2, skipped: 0 },
+      files: {
+        totalChecked: 25,
+        testFiles: 10,
+        typeCheckFiles: 15,
+        lintFiles: 15,
+        formatFiles: 15,
+      },
+      tests: { totalTests: 50, passedTests: 35, failedTests: 15, skippedTests: 0 },
+      timing: {
+        totalDuration: 45000,
+        averageStageTime: 9000,
+        longestStage: "Test Execution",
+        longestStageDuration: 15000,
+      },
+    };
+    logger.logSummary(5, 3, 2, 45000, detailedStats);
   }
 });
 
