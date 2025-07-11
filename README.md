@@ -80,6 +80,27 @@ deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --log-mode debug --log-key CI_DEBUG --log-length M
 ```
 
+#### 階層指定実行
+
+特定のディレクトリ階層のみを対象としたCI実行が可能です：
+
+```bash
+# src/ディレクトリのみを対象とした実行（位置引数）
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci src/
+
+# lib/ディレクトリのみを対象とした実行（--hierarchyオプション）
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --hierarchy lib/
+
+# tests/core/ディレクトリのみを対象とした実行
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci tests/core/
+
+# 階層指定とモード組み合わせ（src/配下をバッチモードで実行）
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --hierarchy src/ --mode batch
+
+# 階層指定とログモード組み合わせ（lib/配下をデバッグモードで実行）
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci lib/ --log-mode error-files-only
+```
+
 #### 高度な使用例
 
 ```bash
@@ -168,6 +189,9 @@ console.log(`Found ${projectFiles.testFiles.length} test files`);
 | オプション                   | 説明                                                        | デフォルト値         | 例                          |
 | ---------------------------- | ----------------------------------------------------------- | -------------------- | --------------------------- |
 | `--mode <mode>`              | 実行モード: `all`, `batch`, `single-file`（実行速度順）     | `all`                | `--mode batch`              |
+| `--hierarchy <path>`         | 対象ディレクトリ階層の指定（特定ディレクトリのみ実行）      | プロジェクト全体     | `--hierarchy src/`          |
+| `--dir <path>`               | 階層指定のエイリアス（`--hierarchy`と同じ）                 | プロジェクト全体     | `--dir lib/`                |
+| `<path>`                     | 位置引数での階層指定（オプションなしで直接パス指定）        | プロジェクト全体     | `src/components/`           |
 | `--batch-size <size>`        | バッチあたりのファイル数 (1-100)                            | `25`                 | `--batch-size 10`           |
 | `--fallback`                 | 実行戦略のフォールバックを有効化                            | `true`               | `--fallback`                |
 | `--no-fallback`              | 実行戦略のフォールバックを無効化                            | -                    | `--no-fallback`             |
@@ -200,6 +224,16 @@ deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --
 
 # dirtyな状態でのJSR互換性チェック
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --allow-dirty --log-mode normal
+
+# 階層指定の組み合わせ例
+# src/配下のみを高速チェック
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci src/ --mode all --log-mode silent
+
+# lib/配下をバッチモードで詳細チェック
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --hierarchy lib/ --mode batch --log-mode error-files-only
+
+# tests/配下をシングルファイルモードでデバッグ
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci tests/ --mode single-file --log-mode debug --log-key TEST --log-length M
 ```
 
 ## 🎯 CI Pipeline Stages
@@ -214,6 +248,86 @@ The CI runner executes the following stages in order:
 
 Each stage must pass before proceeding to the next. On failure, the pipeline stops and reports
 detailed error information.
+
+## 🗂️ 階層指定機能（Directory Hierarchy Targeting）
+
+特定のディレクトリ階層のみを対象としたCI実行により、大規模プロジェクトでの効率的な開発が可能です。
+
+### 階層指定の基本的な使用方法
+
+```bash
+# 位置引数での階層指定（推奨）
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci src/
+
+# --hierarchyオプションでの階層指定
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --hierarchy lib/
+
+# --dirオプション（--hierarchyのエイリアス）
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --dir tests/core/
+```
+
+### 階層指定時の動作
+
+#### ✅ 実行対象となるステージ
+
+1. **Type Check**: `deno check <階層>/` - 指定階層内のTypeScriptファイルの型チェック
+2. **JSR Check**: **自動スキップ** - JSRパッケージチェックは常にプロジェクト全体が対象のため
+3. **Test**: `deno test <階層>/` - 指定階層内のテストファイルのみ実行
+4. **Lint**: `deno lint <階層>/` - 指定階層内のファイルのリント
+5. **Format**: `deno fmt --check <階層>/` - 指定階層内のファイルのフォーマットチェック
+
+#### 🎯 対象ファイル（階層指定時）
+
+- **TypeScript files**: `<階層>/**/*.ts`, `<階層>/**/*.tsx`, `<階層>/**/*.d.ts`
+- **Test files**: `<階層>/**/*_test.ts`, `<階層>/**/*.test.ts`
+- **All source files**: 階層内のすべてのTypeScriptファイル
+
+### 実用的な階層指定例
+
+```bash
+# フロントエンド関連のみをチェック
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci src/components/
+
+# バックエンドAPIのみをチェック
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci src/api/
+
+# 特定のサービス層のみをチェック
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci src/services/user/
+
+# テストディレクトリのみをチェック
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci tests/integration/
+
+# ユーティリティモジュールのみをチェック
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci lib/utils/
+```
+
+### 階層指定と実行モードの組み合わせ
+
+```bash
+# src/配下をバッチモードで実行（中規模プロジェクト向け）
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci src/ --mode batch --batch-size 15
+
+# lib/配下をシングルファイルモードでデバッグ
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci lib/ --mode single-file --log-mode debug --log-key LIB --log-length M
+
+# tests/配下のエラーファイルのみ確認
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci tests/ --log-mode error-files-only
+```
+
+### 階層指定のメリット
+
+- **🚀 高速実行**: 必要な部分のみをチェックして開発サイクルを高速化
+- **🎯 集中開発**: 作業中のモジュールに集中した検証
+- **📊 効率的デバッグ**: 問題のある階層を特定してピンポイントで修正
+- **⚡ CI最適化**: 変更された階層のみをチェックしてCI時間を短縮
+- **🔍 段階的検証**: 段階的にコードを検証して品質を向上
+
+### 注意事項
+
+- **JSR Check自動スキップ**: 階層指定時はJSRチェックが自動的にスキップされます
+- **相対パス対応**: 相対パス・絶対パスの両方をサポート
+- **存在チェック**: 存在しない階層を指定した場合は適切なエラーメッセージを表示
+- **フォールバック継承**: 階層指定時も実行モードのフォールバック機能は継続して動作
 
 ## 📊 実行モード詳細
 
@@ -344,6 +458,25 @@ deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --
 
 # 3. プルリクエスト前の最終確認
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode all --log-mode silent
+```
+
+### 階層指定を活用した開発ワークフロー
+
+```bash
+# 1. 作業中のモジュールのみ迅速チェック（src/components/配下）
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci src/components/ --mode single-file --log-mode error-files-only
+
+# 2. API関連のみバッチチェック（src/api/配下）
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci src/api/ --mode batch --log-mode normal
+
+# 3. 新機能のテストのみ実行（tests/features/new-feature/配下）
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci tests/features/new-feature/ --mode all
+
+# 4. ライブラリ変更後の影響確認（lib/配下）
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci lib/ --mode batch --stop-on-first-error
+
+# 5. ユーティリティ修正後の検証（src/utils/配下）
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci src/utils/ --mode all --log-mode silent
 ```
 
 ### CI/CD環境
