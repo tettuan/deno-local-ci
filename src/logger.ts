@@ -103,13 +103,20 @@ export class CILogger {
     if (this.mode.kind === "silent") return;
 
     const stageName = this.getStageName(stage);
+    const commandInfo = this.getCommandInfo(stage);
 
     switch (this.mode.kind) {
       case "normal":
         console.log(`\nStarting ${stageName}...`);
+        if (commandInfo) {
+          console.log(`└─ ${commandInfo}`);
+        }
         break;
       case "debug":
         console.log(`\n[DEBUG] Starting ${stageName}...`);
+        if (commandInfo) {
+          console.log(`└─ ${commandInfo}`);
+        }
         this.logStageDetails(stage);
         break;
       case "error-files-only":
@@ -305,6 +312,57 @@ export class CILogger {
         return "Lint Check";
       case "format-check":
         return "Format Check";
+    }
+  }
+
+  private getCommandInfo(stage: CIStage): string | null {
+    switch (stage.kind) {
+      case "lockfile-init":
+        return "deno cache --reload mod.ts";
+      case "type-check": {
+        if (stage.hierarchy) {
+          return `deno check ${stage.hierarchy}`;
+        }
+        return stage.files.length > 0 ? `deno check <${stage.files.length} files>` : "deno check .";
+      }
+      case "jsr-check": {
+        if (stage.hierarchy) {
+          return null; // JSR check is skipped when hierarchy is specified
+        }
+        const jsrArgs = ["deno publish"];
+        if (stage.dryRun) jsrArgs.push("--dry-run");
+        if (stage.allowDirty) jsrArgs.push("--allow-dirty");
+        return jsrArgs.join(" ");
+      }
+      case "test-execution": {
+        const testArgs = ["deno test"];
+        // Default permissions
+        testArgs.push("--allow-read", "--allow-write", "--allow-run", "--allow-env");
+        if (stage.hierarchy) {
+          testArgs.push(stage.hierarchy);
+        } else {
+          testArgs.push("<test files>");
+        }
+        return testArgs.join(" ");
+      }
+      case "lint-check": {
+        if (stage.hierarchy) {
+          return `deno lint ${stage.hierarchy}`;
+        }
+        return stage.files.length > 0 ? `deno lint <${stage.files.length} files>` : "deno lint .";
+      }
+      case "format-check": {
+        const formatArgs = ["deno fmt"];
+        if (stage.checkOnly) formatArgs.push("--check");
+        if (stage.hierarchy) {
+          formatArgs.push(stage.hierarchy);
+        } else {
+          formatArgs.push("<files>");
+        }
+        return formatArgs.join(" ");
+      }
+      default:
+        return null;
     }
   }
 
