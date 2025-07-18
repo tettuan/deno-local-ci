@@ -291,7 +291,12 @@ export class CIRunner {
     const strategyResult = ExecutionStrategyService.determineStrategy(this.config);
     if (strategyResult.ok && testFiles.length > 0) {
       stages.push(
-        CIPipelineOrchestrator.createStage("test-execution", [], strategyResult.data, hierarchy),
+        CIPipelineOrchestrator.createStage(
+          "test-execution",
+          testFiles,
+          strategyResult.data,
+          hierarchy,
+        ),
       );
     }
 

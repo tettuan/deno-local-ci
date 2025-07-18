@@ -340,8 +340,11 @@ export class CILogger {
         testArgs.push("--allow-read", "--allow-write", "--allow-run", "--allow-env");
         if (stage.hierarchy) {
           testArgs.push(stage.hierarchy);
+        } else if (stage.files && stage.files.length > 0) {
+          // 実際のテストファイルを表示
+          testArgs.push(...stage.files);
         } else {
-          testArgs.push("<test files>");
+          testArgs.push("**/*test.ts");
         }
         return testArgs.join(" ");
       }
@@ -375,6 +378,10 @@ export class CILogger {
       case "test-execution":
         console.log(`   Strategy: ${stage.strategy.mode.kind}`);
         console.log(`   Fallback: ${stage.strategy.fallbackEnabled}`);
+        if (stage.files && stage.files.length > 0) {
+          console.log(`   Test files: ${stage.files.length}`);
+          stage.files.forEach((file) => console.log(`     - ${file}`));
+        }
         break;
       case "jsr-check":
         console.log(`   Dry run: ${stage.dryRun}`);

@@ -150,6 +150,7 @@ Deno.test("StageInternalFallbackService - should retry with fallback for TestFai
     const stage: CIStage = {
       kind: "test-execution",
       strategy: strategyResult.data,
+      files: ["test1.test.ts", "test2.test.ts"],
       hierarchy: null,
     };
 
@@ -256,10 +257,14 @@ Deno.test("CIPipelineOrchestrator - create stages", () => {
       assertEquals(jsrStage.dryRun, true);
     }
 
-    const testStage = CIPipelineOrchestrator.createStage("test-execution", [], strategy.data);
+    const testStage = CIPipelineOrchestrator.createStage("test-execution", [
+      "test1.test.ts",
+      "test2.test.ts",
+    ], strategy.data);
     assertEquals(testStage.kind, "test-execution");
     if (testStage.kind === "test-execution") {
       assertExists(testStage.strategy);
+      assertEquals(testStage.files.length, 2);
     }
   }
 });

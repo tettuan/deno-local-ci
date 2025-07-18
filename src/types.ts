@@ -112,7 +112,12 @@ export type CIStage =
   | { kind: "lockfile-init"; action: "regenerate" }
   | { kind: "type-check"; files: string[]; optimized: boolean; hierarchy: string | null }
   | { kind: "jsr-check"; dryRun: boolean; allowDirty: boolean; hierarchy: string | null }
-  | { kind: "test-execution"; strategy: ExecutionStrategy; hierarchy: string | null }
+  | {
+    kind: "test-execution";
+    strategy: ExecutionStrategy;
+    files: string[];
+    hierarchy: string | null;
+  }
   | { kind: "lint-check"; files: string[]; hierarchy: string | null }
   | { kind: "format-check"; checkOnly: boolean; hierarchy: string | null };
 

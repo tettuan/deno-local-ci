@@ -134,7 +134,7 @@ export class CIPipelineOrchestrator {
         if (!strategy) {
           throw new Error("ExecutionStrategy is required for test-execution stage");
         }
-        return { kind: "test-execution", strategy, hierarchy: hierarchy || null };
+        return { kind: "test-execution", strategy, files, hierarchy: hierarchy || null };
       case "lint-check":
         return { kind: "lint-check", files, hierarchy: hierarchy || null };
       case "format-check":
