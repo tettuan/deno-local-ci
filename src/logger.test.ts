@@ -194,10 +194,10 @@ Deno.test("CILogger - silent mode suppresses most logs", () => {
       hierarchy: null,
     };
 
-    // サイレントモードでは開始ログは出力されない
+    // In silent mode, start logs are not output
     logger.logStageStart(stage);
 
-    // エラーログは出力される
+    // Error logs are output
     logger.logError("Test error message");
   }
 });
@@ -215,7 +215,7 @@ Deno.test("CILogger - error files only mode", () => {
       details: ["Lint rule violation", "Style issue"],
     };
 
-    // エラーファイルのみモードではファイル一覧のみ表示
+    // In error-files-only mode, only file list is displayed
     logger.logErrorFiles(error);
   }
 });
@@ -230,11 +230,11 @@ Deno.test("CILogger - debug mode with breakdown logger", () => {
     if (loggerResult.ok) {
       const logger = loggerResult.data;
 
-      // 環境変数設定前の保存
+      // Save environment variables before setting
       const originalLogLength = Deno.env.get("LOG_LENGTH");
       const originalLogKey = Deno.env.get("LOG_KEY");
 
-      // BreakdownLogger環境変数設定
+      // BreakdownLogger environment variable setting
       logger.setupBreakdownLogger();
 
       // 設定確認
@@ -288,12 +288,12 @@ Deno.test("CILogger - BreakdownLogger integration", () => {
     if (loggerResult.ok) {
       const logger = loggerResult.data;
 
-      // 環境変数設定前の保存
+      // Save environment variables before setting
       const originalLogLength = Deno.env.get("LOG_LENGTH");
       const originalLogKey = Deno.env.get("LOG_KEY");
 
       try {
-        // BreakdownLogger環境変数設定
+        // BreakdownLogger environment variable setting
         logger.setupBreakdownLogger();
 
         // 設定確認

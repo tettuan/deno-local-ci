@@ -479,11 +479,11 @@ export class CIRunner {
       return skippedResult;
     }
 
-    // 実行戦略に基づくテスト実行（階層情報を含む）
+    // Execute tests based on strategy (including hierarchy information)
     const result = await this.executeTestsWithStrategy(stage.strategy, testFiles, stage.hierarchy);
     const duration = performance.now() - startTime;
 
-    // テスト統計の更新
+    // Update test statistics
     if (result.ok) {
       this.updateTestStats(result.data, testFiles);
     }
@@ -499,15 +499,15 @@ export class CIRunner {
     } else {
       const errorOutput = result.ok ? result.data.stderr : result.error.message;
 
-      // フォールバック試行
+      // Attempt fallback
       if (stage.strategy.fallbackEnabled) {
-        // フォールバックを試行してエラーの詳細特定を行う
+        // Try fallback to identify error details
         await this.attemptTestFallback(
           stage.strategy,
           testFiles,
           errorOutput,
         );
-        // フォールバックは詳細なエラー特定のみで、結果は常に失敗として扱う
+        // Fallback is only for detailed error identification, result is always treated as failure
       }
 
       const failureResult: StageResult = {
