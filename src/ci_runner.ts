@@ -528,7 +528,7 @@ export class CIRunner {
           failedBatch,
         );
 
-        // If fallback succeeded, return success
+        // フォールバック結果の詳細チェック
         if (fallbackResult.ok && fallbackResult.data.success) {
           const successResult: StageResult = {
             kind: "success",
@@ -537,6 +537,25 @@ export class CIRunner {
           };
           this.logger.logStageResult(successResult);
           return successResult;
+        } else {
+          // フォールバック失敗時：詳細なエラー情報を生成
+          const fallbackErrorOutput = fallbackResult.ok
+            ? fallbackResult.data.stderr
+            : fallbackResult.error.message;
+
+          // エラー分類を実行してCIErrorオブジェクトを作成
+          const classifiedError = ErrorClassificationService.classifyError(
+            fallbackResult.ok ? fallbackResult.data : {
+              success: false,
+              code: 1,
+              stdout: "",
+              stderr: fallbackErrorOutput,
+              duration: 0,
+            },
+          );
+
+          // エラーファイル詳細をログに出力
+          this.logger.logErrorFiles(classifiedError);
         }
         // If fallback failed, continue to failure handling below
       }
@@ -643,18 +662,73 @@ export class CIRunner {
         // 全域性原則：各ファイルを個別実行し、エラー時はstopOnFirstErrorに従う
         this.logger.logInfo(`[SINGLE-FILE] Processing ${testFiles.length} files individually`);
 
+        const failedFiles: Array<{ file: string; error: string }> = [];
+        let firstFailureResult:
+          | Result<ProcessResultWithBatch, ValidationError & { message: string }>
+          | null = null;
+
         for (const file of testFiles) {
           this.logger.logInfo(`[SINGLE-FILE] Executing: ${file}`);
           const result = await DenoCommandRunner.test([file], { hierarchy });
           if (!result.ok || !result.data.success) {
+            const errorDetails = result.ok ? result.data.stderr : result.error.message;
+            failedFiles.push({ file, error: errorDetails });
+
+            // 失敗時のみDenoの実際のテスト出力をそのまま表示
+            this.logger.logInfo(`[SINGLE-FILE] Test failed for ${file}:`);
+            if (result.ok) {
+              // stdoutとstderrの両方を表示（Denoのテスト出力はstderrに含まれることが多い）
+              if (result.data.stdout.trim()) {
+                console.log(result.data.stdout);
+              }
+              if (result.data.stderr.trim()) {
+                console.log(result.data.stderr);
+              }
+            } else {
+              console.log(result.error.message);
+            }
+
             if (strategy.mode.stopOnFirstError) {
               this.logger.logInfo(`[SINGLE-FILE] Stopping on first error at ${file}`);
-              return result;
+              // 失敗ファイル情報を含むカスタム結果を作成
+              firstFailureResult = result;
+              break;
             }
             this.logger.logInfo(`[SINGLE-FILE] Continuing after error in ${file}`);
             // stopOnFirstError = false の場合は継続実行
           }
+          // 成功時は出力を省略（ログメッセージのみ）
         }
+
+        // エラーファイルがある場合の処理
+        if (failedFiles.length > 0) {
+          // 失敗したファイルの詳細をログに出力
+          this.logger.logInfo(`[SINGLE-FILE] Failed files (${failedFiles.length}):`);
+          for (const { file, error } of failedFiles) {
+            this.logger.logInfo(`  - ${file}: ${error.split("\n")[0]}`); // 最初の行のみ表示
+          }
+
+          // stopOnFirstError=trueの場合は最初の失敗結果を返す
+          if (strategy.mode.stopOnFirstError && firstFailureResult) {
+            return firstFailureResult;
+          }
+
+          // stopOnFirstError=falseの場合は全失敗ファイル情報を含む失敗結果を作成
+          const aggregatedError = failedFiles.map((f) => `${f.file}: ${f.error.split("\n")[0]}`)
+            .join("; ");
+          return {
+            ok: true,
+            data: {
+              success: false,
+              code: 1,
+              stdout: "",
+              stderr: aggregatedError,
+              duration: 0,
+              failedBatch: undefined,
+            },
+          };
+        }
+
         this.logger.logInfo(
           `[SINGLE-FILE] All ${testFiles.length} files processed successfully`,
         );

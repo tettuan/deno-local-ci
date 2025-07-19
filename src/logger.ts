@@ -170,6 +170,20 @@ export class CILogger {
       const prefix = index === files.length - 1 ? "  └─" : "  ├─";
       console.log(`${prefix} ${file}`);
     });
+
+    // TestFailureの場合は詳細エラーも表示
+    if (error.kind === "TestFailure" && error.errors.length > 0) {
+      console.log("\nError details:");
+      error.errors.slice(0, 3).forEach((errorMsg, index) => { // 最初の3つのエラーのみ表示
+        const prefix = index === Math.min(error.errors.length, 3) - 1 ? "  └─" : "  ├─";
+        const truncatedMsg = errorMsg.length > 100 ? errorMsg.substring(0, 100) + "..." : errorMsg;
+        console.log(`${prefix} ${truncatedMsg.split("\n")[0]}`); // 最初の行のみ
+      });
+
+      if (error.errors.length > 3) {
+        console.log(`  └─ ... and ${error.errors.length - 3} more errors`);
+      }
+    }
   }
 
   /**

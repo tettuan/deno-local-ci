@@ -209,10 +209,29 @@ export class ErrorClassificationService {
   }
 
   private static extractFileNames(output: string): string[] {
+    const allMatches: string[] = [];
+
+    // 基本的なTypeScriptファイルパターン
     const filePattern = /[\w\/\-\.]+\.tsx?/g;
-    const matches = output.match(filePattern) || [];
+    const basicMatches = output.match(filePattern) || [];
+    allMatches.push(...basicMatches);
+
+    // Single-file実行時の特別パターンも検出
+    const singleFilePattern = /\[SINGLE-FILE\] Error in ([^:]+):/g;
+    let singleFileMatch;
+    while ((singleFileMatch = singleFilePattern.exec(output)) !== null) {
+      allMatches.push(singleFileMatch[1]);
+    }
+
+    // ファイルパスの検出も改善
+    const pathPattern = /(?:at|in|from)\s+([^\s:]+\.tsx?)/g;
+    let pathMatch;
+    while ((pathMatch = pathPattern.exec(output)) !== null) {
+      allMatches.push(pathMatch[1]);
+    }
+
     // 重複を排除してソートする
-    return [...new Set(matches)].sort();
+    return [...new Set(allMatches)].sort();
   }
 }
 
