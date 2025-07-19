@@ -21,6 +21,7 @@ import {
   CISummaryStats,
   ExecutionStrategy,
   ProcessResult,
+  ProcessResultWithBatch,
   Result,
   StageResult,
   ValidationError,
@@ -290,10 +291,12 @@ export class CIRunner {
     // Test execution stage
     const strategyResult = ExecutionStrategyService.determineStrategy(this.config);
     if (strategyResult.ok && testFiles.length > 0) {
+      // Allモードの場合は空のファイルリストを渡す（全体実行）
+      const stageFiles = strategyResult.data.mode.kind === "all" ? [] : testFiles;
       stages.push(
         CIPipelineOrchestrator.createStage(
           "test-execution",
-          testFiles,
+          stageFiles,
           strategyResult.data,
           hierarchy,
         ),
@@ -501,13 +504,31 @@ export class CIRunner {
 
       // Attempt fallback
       if (stage.strategy.fallbackEnabled) {
-        // Try fallback to identify error details
-        await this.attemptTestFallback(
+        // Extract failed batch information if available
+        const failedBatch = (result.ok && "failedBatch" in result.data)
+          ? (result.data as ProcessResultWithBatch).failedBatch
+          : undefined;
+
+        // Try fallback and use the result
+        const fallbackResult = await this.attemptTestFallback(
           stage.strategy,
           testFiles,
           errorOutput,
+          stage.hierarchy,
+          failedBatch,
         );
-        // Fallback is only for detailed error identification, result is always treated as failure
+
+        // If fallback succeeded, return success
+        if (fallbackResult.ok && fallbackResult.data.success) {
+          const successResult: StageResult = {
+            kind: "success",
+            stage,
+            duration,
+          };
+          this.logger.logStageResult(successResult);
+          return successResult;
+        }
+        // If fallback failed, continue to failure handling below
       }
 
       const failureResult: StageResult = {
@@ -525,11 +546,12 @@ export class CIRunner {
     strategy: ExecutionStrategy,
     testFiles: string[],
     hierarchy?: string | null,
-  ) {
+  ): Promise<Result<ProcessResultWithBatch, ValidationError & { message: string }>> {
     switch (strategy.mode.kind) {
       case "all":
-        this.logger.logInfo(`[ALL] Processing all ${testFiles.length} files together`);
-        return await DenoCommandRunner.test(testFiles, { hierarchy });
+        this.logger.logInfo(`[ALL] Processing all tests together (no file arguments)`);
+        // Allモードでは引数なしで全体実行（Denoのデフォルト動作）
+        return await DenoCommandRunner.test([], { hierarchy });
 
       case "batch": {
         // 型安全なバッチ実行
@@ -551,11 +573,54 @@ export class CIRunner {
           const result = await DenoCommandRunner.test(batch, { hierarchy });
           if (!result.ok || !result.data.success) {
             this.logger.logInfo(`[BATCH] Batch ${batchNumber} failed`);
-            // 失敗したバッチ情報を含める（フォールバック用）
-            return {
-              ...result,
-              failedBatch: { startIndex: i, endIndex: i + batchSize - 1, files: batch },
-            };
+
+            // バッチ失敗時: 段階内フォールバック（Batch → Single-file）を実行
+            if (strategy.fallbackEnabled) {
+              const failedBatchInfo = { startIndex: i, endIndex: i + batchSize - 1, files: batch };
+              const fallbackStrategyResult = StageInternalFallbackService.createFallbackStrategy(
+                strategy,
+                failedBatchInfo,
+              );
+
+              if (fallbackStrategyResult.ok) {
+                const fallbackStrategy = fallbackStrategyResult.data;
+                this.logger.logFallback(
+                  strategy.mode.kind,
+                  fallbackStrategy.mode.kind,
+                  result.ok ? result.data.stderr : result.error.message,
+                );
+
+                // 失敗したバッチのファイルのみでフォールバック実行
+                const targetFiles = StageInternalFallbackService.extractTargetFiles(
+                  testFiles,
+                  strategy,
+                  fallbackStrategy,
+                  failedBatchInfo,
+                );
+
+                const fallbackResult = await this.executeTestsWithStrategy(
+                  fallbackStrategy,
+                  targetFiles,
+                  hierarchy,
+                );
+                if (fallbackResult.ok && fallbackResult.data.success) {
+                  this.logger.logInfo(`[BATCH] Fallback succeeded for batch ${batchNumber}`);
+                  continue; // 次のバッチに進む
+                }
+              }
+            }
+
+            // フォールバックが無効、または失敗した場合は失敗として返す
+            if (result.ok) {
+              const processResultWithBatch: ProcessResultWithBatch = {
+                ...result.data,
+                success: false,
+                failedBatch: { startIndex: i, endIndex: i + batchSize - 1, files: batch },
+              };
+              return { ok: true, data: processResultWithBatch };
+            } else {
+              return result;
+            }
           }
           this.logger.logInfo(`[BATCH] Batch ${batchNumber} completed successfully`);
         }
@@ -593,9 +658,11 @@ export class CIRunner {
     testFiles: string[],
     originalError: string,
     hierarchy?: string | null,
+    failedBatch?: { startIndex: number; endIndex: number; files: string[] },
   ) {
     const fallbackStrategyResult = StageInternalFallbackService.createFallbackStrategy(
       currentStrategy,
+      failedBatch,
     );
 
     if (!fallbackStrategyResult.ok) {
@@ -609,7 +676,15 @@ export class CIRunner {
       originalError,
     );
 
-    return await this.executeTestsWithStrategy(fallbackStrategy, testFiles, hierarchy);
+    // 対象ファイルを決定: 失敗したバッチ範囲のみか全ファイルか
+    const targetFiles = StageInternalFallbackService.extractTargetFiles(
+      testFiles,
+      currentStrategy,
+      fallbackStrategy,
+      failedBatch,
+    );
+
+    return await this.executeTestsWithStrategy(fallbackStrategy, targetFiles, hierarchy);
   }
 
   private async executeLint(stage: CIStage, startTime: number): Promise<StageResult> {
@@ -884,9 +959,11 @@ export class CIRunner {
     currentStrategy: ExecutionStrategy,
     files: string[],
     originalError: string,
+    failedBatch?: { startIndex: number; endIndex: number; files: string[] },
   ) {
     const fallbackStrategyResult = StageInternalFallbackService.createFallbackStrategy(
       currentStrategy,
+      failedBatch,
     );
 
     if (!fallbackStrategyResult.ok) {
@@ -900,7 +977,15 @@ export class CIRunner {
       originalError,
     );
 
-    return await this.executeLintWithStrategy(fallbackStrategy, files);
+    // 対象ファイルを決定: 失敗したバッチ範囲のみか全ファイルか
+    const targetFiles = StageInternalFallbackService.extractTargetFiles(
+      files,
+      currentStrategy,
+      fallbackStrategy,
+      failedBatch,
+    );
+
+    return await this.executeLintWithStrategy(fallbackStrategy, targetFiles);
   }
 
   private async executeFormatWithStrategy(

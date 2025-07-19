@@ -16,6 +16,7 @@
 
 import {
   BreakdownLoggerEnvConfig,
+  CI_CONFIG,
   CIConfig,
   createError,
   ExecutionMode,
@@ -33,7 +34,7 @@ import { getFullVersion } from "./version.ts";
  * ```typescript
  * const options: CLIOptions = {
  *   mode: "batch",
- *   batchSize: 25,
+ *   batchSize: CI_CONFIG.DEFAULT_BATCH_SIZE,
  *   logMode: "debug",
  *   fallbackEnabled: true,
  *   hierarchy: "./src/"  // 階層指定でsrc/ディレクトリのみを対象とする
@@ -105,14 +106,17 @@ export class CLIParser {
             case "--batch-size": {
               const batchSizeStr = args[++i];
               const batchSize = parseInt(batchSizeStr, 10);
-              if (isNaN(batchSize) || batchSize < 1 || batchSize > 100) {
+              if (
+                isNaN(batchSize) || batchSize < CI_CONFIG.MIN_BATCH_SIZE ||
+                batchSize > CI_CONFIG.MAX_BATCH_SIZE
+              ) {
                 return {
                   ok: false,
                   error: createError({
                     kind: "OutOfRange",
                     value: batchSizeStr,
-                    min: 1,
-                    max: 100,
+                    min: CI_CONFIG.MIN_BATCH_SIZE,
+                    max: CI_CONFIG.MAX_BATCH_SIZE,
                   }),
                 };
               }
@@ -271,8 +275,8 @@ export class CLIParser {
     // フォールバック設定
     config.fallbackEnabled = options.fallbackEnabled ?? true;
 
-    // バッチサイズ設定
-    config.batchSize = options.batchSize ?? 25;
+    // バッチサイズ設定（一時的に検証用バッチサイズを使用）
+    config.batchSize = options.batchSize ?? CI_CONFIG.VALIDATION_BATCH_SIZE;
 
     // ログモード設定
     const logModeResult = this.buildLogMode(options);
@@ -305,7 +309,7 @@ USAGE:
 
 OPTIONS:
     --mode <MODE>              Execution mode: all, batch, single-file [default: all]
-    --batch-size <SIZE>        Batch size for batch mode (1-100) [default: 25]
+    --batch-size <SIZE>        Batch size for batch mode (1-100) [default: 2]
     --fallback                 Enable execution strategy fallback [default: true]
     --no-fallback              Disable execution strategy fallback
     
@@ -388,7 +392,7 @@ EXECUTION MODES:
         return { ok: true, data: { kind: "all", projectDirectories: ["."], hierarchy } };
 
       case "batch": {
-        const batchSize = options.batchSize ?? 25;
+        const batchSize = options.batchSize ?? CI_CONFIG.VALIDATION_BATCH_SIZE;
         return { ok: true, data: { kind: "batch", batchSize, failedBatchOnly: false, hierarchy } };
       }
 

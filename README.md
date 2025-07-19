@@ -42,7 +42,8 @@ deno run --allow-read --allow-write --allow-run --allow-env https://raw.githubus
 
 ### Command Line Interface (Main Use Case)
 
-**@aidevtool/ci is primarily designed as a CLI tool.** Run the following commands in your project's root directory:
+**@aidevtool/ci is primarily designed as a CLI tool.** Run the following commands in your project's
+root directory:
 
 #### Basic Usage
 
@@ -186,26 +187,26 @@ console.log(`Found ${projectFiles.testFiles.length} test files`);
 
 ## 🔧 Command Line Options
 
-| Option                       | Description                                                 | Default Value        | Example                     |
-| ---------------------------- | ----------------------------------------------------------- | -------------------- | --------------------------- |
-| `--mode <mode>`              | Execution mode: `all`, `batch`, `single-file` (speed order) | `all`                | `--mode batch`              |
-| `--hierarchy <path>`         | Target directory hierarchy (execute specific directory only) | Entire project       | `--hierarchy src/`          |
-| `--dir <path>`               | Alias for hierarchy specification (same as `--hierarchy`)   | Entire project       | `--dir lib/`                |
-| `<path>`                     | Positional argument for hierarchy (direct path without option) | Entire project       | `src/components/`           |
-| `--batch-size <size>`        | Number of files per batch (1-100)                          | `25`                 | `--batch-size 10`           |
-| `--fallback`                 | Enable execution strategy fallback                         | `true`               | `--fallback`                |
-| `--no-fallback`              | Disable execution strategy fallback                        | -                    | `--no-fallback`             |
-| `--log-mode <mode>`          | Log mode: `normal`, `silent`, `debug`, `error-files-only`  | `normal`             | `--log-mode debug`          |
-| `--log-key <key>`            | BreakdownLogger key (required for debug mode)              | -                    | `--log-key CI_DEBUG`        |
-| `--log-length <length>`      | BreakdownLogger length: `W`, `M`, `L` (required for debug) | -                    | `--log-length M`            |
-| `--stop-on-first-error`      | Stop execution on first error                              | `false`              | `--stop-on-first-error`     |
-| `--continue-on-error`        | Continue execution after errors                            | `true`               | `--continue-on-error`       |
-| `--allow-dirty`              | Allow dirty working directory for JSR check               | `false`              | `--allow-dirty`             |
-| `--filter <pattern>`         | Filter test files by pattern                               | -                    | `--filter "*integration*"`  |
-| `--cwd <path>`               | Specify working directory                                   | Current directory    | `--cwd /path/to/project`    |
-| `--working-directory <path>` | Specify working directory (alias for `--cwd`)              | Current directory    | `--working-directory ./src` |
-| `--help, -h`                 | Display help message                                        | -                    | `--help`                    |
-| `--version, -v`              | Display version information                                 | -                    | `--version`                 |
+| Option                       | Description                                                    | Default Value     | Example                     |
+| ---------------------------- | -------------------------------------------------------------- | ----------------- | --------------------------- |
+| `--mode <mode>`              | Execution mode: `all`, `batch`, `single-file` (speed order)    | `all`             | `--mode batch`              |
+| `--hierarchy <path>`         | Target directory hierarchy (execute specific directory only)   | Entire project    | `--hierarchy src/`          |
+| `--dir <path>`               | Alias for hierarchy specification (same as `--hierarchy`)      | Entire project    | `--dir lib/`                |
+| `<path>`                     | Positional argument for hierarchy (direct path without option) | Entire project    | `src/components/`           |
+| `--batch-size <size>`        | Number of files per batch (1-100)                              | `25`              | `--batch-size 10`           |
+| `--fallback`                 | Enable execution strategy fallback                             | `true`            | `--fallback`                |
+| `--no-fallback`              | Disable execution strategy fallback                            | -                 | `--no-fallback`             |
+| `--log-mode <mode>`          | Log mode: `normal`, `silent`, `debug`, `error-files-only`      | `normal`          | `--log-mode debug`          |
+| `--log-key <key>`            | BreakdownLogger key (required for debug mode)                  | -                 | `--log-key CI_DEBUG`        |
+| `--log-length <length>`      | BreakdownLogger length: `W`, `M`, `L` (required for debug)     | -                 | `--log-length M`            |
+| `--stop-on-first-error`      | Stop execution on first error                                  | `false`           | `--stop-on-first-error`     |
+| `--continue-on-error`        | Continue execution after errors                                | `true`            | `--continue-on-error`       |
+| `--allow-dirty`              | Allow dirty working directory for JSR check                    | `false`           | `--allow-dirty`             |
+| `--filter <pattern>`         | Filter test files by pattern                                   | -                 | `--filter "*integration*"`  |
+| `--cwd <path>`               | Specify working directory                                      | Current directory | `--cwd /path/to/project`    |
+| `--working-directory <path>` | Specify working directory (alias for `--cwd`)                  | Current directory | `--working-directory ./src` |
+| `--help, -h`                 | Display help message                                           | -                 | `--help`                    |
+| `--version, -v`              | Display version information                                    | -                 | `--version`                 |
 
 ### Option Combination Examples
 
@@ -251,7 +252,8 @@ detailed error information.
 
 ## 🗂️ Directory Hierarchy Targeting
 
-Efficient development for large projects is possible by targeting specific directory hierarchies for CI execution.
+Efficient development for large projects is possible by targeting specific directory hierarchies for
+CI execution.
 
 ### Basic Usage of Hierarchy Specification
 
@@ -270,7 +272,8 @@ deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --
 
 #### ✅ Stages That Will Execute
 
-1. **Type Check**: `deno check <hierarchy>/` - Type check TypeScript files within specified hierarchy
+1. **Type Check**: `deno check <hierarchy>/` - Type check TypeScript files within specified
+   hierarchy
 2. **JSR Check**: **Automatically skipped** - JSR package check always targets the entire project
 3. **Test**: `deno test <hierarchy>/` - Execute only test files within specified hierarchy
 4. **Lint**: `deno lint <hierarchy>/` - Lint files within specified hierarchy
@@ -327,7 +330,8 @@ deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci te
 - **JSR Check Auto-Skip**: JSR check is automatically skipped when hierarchy is specified
 - **Relative Path Support**: Supports both relative and absolute paths
 - **Existence Check**: Shows appropriate error message when non-existent hierarchy is specified
-- **Fallback Inheritance**: Execution mode fallback functionality continues to work with hierarchy specification
+- **Fallback Inheritance**: Execution mode fallback functionality continues to work with hierarchy
+  specification
 
 ## 📊 実行モード詳細
 

@@ -14,6 +14,23 @@
  * @module
  */
 
+// === CI Configuration Constants ===
+
+/**
+ * CI実行設定の定数定義
+ * マジックナンバーを一元管理し、設定の一貫性を保証
+ */
+export const CI_CONFIG = {
+  /** デフォルトバッチサイズ */
+  DEFAULT_BATCH_SIZE: 25,
+  /** 検証用バッチサイズ（要求事項検証時に使用） */
+  VALIDATION_BATCH_SIZE: 2,
+  /** バッチサイズの最小値 */
+  MIN_BATCH_SIZE: 1,
+  /** バッチサイズの最大値 */
+  MAX_BATCH_SIZE: 100,
+} as const;
+
 // === Result Type for Error Value Handling ===
 
 /**
@@ -162,6 +179,18 @@ export type ProcessResult = {
   duration: number;
 };
 
+// === バッチ失敗情報 ===
+export type FailedBatchInfo = {
+  startIndex: number;
+  endIndex: number;
+  files: string[];
+};
+
+// === 拡張プロセス実行結果（バッチ失敗情報付き）===
+export type ProcessResultWithBatch = ProcessResult & {
+  failedBatch?: FailedBatchInfo;
+};
+
 // === CI設定 ===
 export type CIConfig = {
   mode?: ExecutionMode;
@@ -191,14 +220,17 @@ export class ExecutionStrategy {
     fallbackEnabled = true,
     hierarchy: string | null = null,
   ): Result<ExecutionStrategy, ValidationError & { message: string }> {
-    if (mode.kind === "batch" && (mode.batchSize < 1 || mode.batchSize > 100)) {
+    if (
+      mode.kind === "batch" &&
+      (mode.batchSize < CI_CONFIG.MIN_BATCH_SIZE || mode.batchSize > CI_CONFIG.MAX_BATCH_SIZE)
+    ) {
       return {
         ok: false,
         error: createError({
           kind: "OutOfRange",
           value: mode.batchSize,
-          min: 1,
-          max: 100,
+          min: CI_CONFIG.MIN_BATCH_SIZE,
+          max: CI_CONFIG.MAX_BATCH_SIZE,
         }),
       };
     }
@@ -212,7 +244,12 @@ export class ExecutionStrategy {
   getNextFallbackMode(): ExecutionMode | null {
     switch (this.mode.kind) {
       case "all":
-        return { kind: "batch", batchSize: 25, failedBatchOnly: false, hierarchy: this.hierarchy };
+        return {
+          kind: "batch",
+          batchSize: CI_CONFIG.DEFAULT_BATCH_SIZE,
+          failedBatchOnly: false,
+          hierarchy: this.hierarchy,
+        };
       case "batch":
         return { kind: "single-file", stopOnFirstError: true, hierarchy: this.hierarchy };
       case "single-file":

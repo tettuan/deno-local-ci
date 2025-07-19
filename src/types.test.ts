@@ -1,11 +1,12 @@
 /**
- * Deno Local CI - Types Test
+ * CI - Types Test
  *
  * 型定義とSmart Constructorのテスト
  * 全域性原則に基づく型安全性の検証
  */
 
 import { assertEquals, assertExists } from "https://deno.land/std@0.208.0/assert/mod.ts";
+
 import {
   BreakdownLoggerEnvConfig,
   createError,
