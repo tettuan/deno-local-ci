@@ -1,14 +1,14 @@
 /**
  * # Deno Local CI - Compressed Theorem Types
  *
- * 圧縮技術による定理表現 - 型システムによる不変条件の表現
- * Branded Types、Smart Constructor、型レベル制約による型安全性の最大化
+ * Theorem representation through compression techniques - Expressing invariant conditions through type system
+ * Maximizing type safety through Branded Types, Smart Constructors, and type-level constraints
  *
- * ## 設計原則
- * - ビジネスルールの型制約化
- * - 不正状態の型レベル排除
- * - 代数的データ型による状態空間の完全分割
- * - 実行時エラーの可能性を型レベルで最小化
+ * ## Design Principles
+ * - Type constraint conversion of business rules
+ * - Type-level elimination of invalid states
+ * - Complete partitioning of state space through algebraic data types
+ * - Minimizing possibility of runtime errors at type level
  *
  * @module
  */
@@ -18,49 +18,49 @@ import { createError, Result, ValidationError } from "./types.ts";
 // === Branded Types for Type-Level Constraints ===
 
 /**
- * バッチサイズ制約 (1 <= n <= 100)
+ * Batch size constraint (1 <= n <= 100)
  */
 export type BatchSizeConstraint = number & { __brand: "ValidBatchSize" };
 
 /**
- * 階層パス制約 (存在確認済みパス)
+ * Hierarchy path constraint (validated existing path)
  */
 export type HierarchyPath = string & { __brand: "ValidHierarchy" };
 
 /**
- * 実行ID制約 (UUID v4形式)
+ * Execution ID constraint (UUID v4 format)
  */
 export type ExecutionId = string & { __brand: "ExecutionId" };
 
 /**
- * ファイルパス制約 (存在確認済みファイルパス)
+ * File path constraint (validated existing file path)
  */
 export type ValidFilePath = string & { __brand: "ValidFilePath" };
 
 /**
- * コマンド名制約 (実行可能コマンド)
+ * Command name constraint (executable command)
  */
 export type ExecutableCommand = string & { __brand: "ExecutableCommand" };
 
 /**
- * 正の整数制約
+ * Positive integer constraint
  */
 export type PositiveInteger = number & { __brand: "PositiveInteger" };
 
 /**
- * 非負整数制約
+ * Non-negative integer constraint
  */
 export type NonNegativeInteger = number & { __brand: "NonNegativeInteger" };
 
 /**
- * タイムスタンプ制約
+ * Timestamp constraint
  */
 export type Timestamp = number & { __brand: "Timestamp" };
 
 // === Type-Level Proof Types ===
 
 /**
- * フォールバック完全性証明
+ * Fallback completeness proof
  */
 export type FallbackProof =
   | { kind: "Complete"; allModesExhausted: true; provenAt: Timestamp }

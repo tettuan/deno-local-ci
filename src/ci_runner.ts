@@ -454,7 +454,7 @@ export class CIRunner {
       throw new Error("Invalid stage type for test execution");
     }
 
-    // 階層が指定されている場合は階層内のテストファイルを検索
+    // Search for test files within the hierarchy if specified
     const targetDirectory = stage.hierarchy || this.projectRoot;
     const testFilesResult = await ProjectFileDiscovery.findTestFiles(targetDirectory);
     if (!testFilesResult.ok) {
