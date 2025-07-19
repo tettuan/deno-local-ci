@@ -38,10 +38,10 @@ Deno.test("CI Runner - silent mode logging verification", () => {
   if (loggerResult.ok) {
     const logger = loggerResult.data;
 
-    // サイレントモードでのログ抑制を確認
-    // 通常は出力されるログが抑制されることをテスト
+    // Verify log suppression in silent mode
+    // Test that normally output logs are suppressed
 
-    // コンソール出力をキャプチャするためのスパイ
+    // Spy to capture console output
     const originalLog = console.log;
     let logCalled = false;
     console.log = () => {
@@ -49,7 +49,7 @@ Deno.test("CI Runner - silent mode logging verification", () => {
     };
 
     try {
-      // stage start ログはサイレントモードでは出力されない
+      // stage start logs are not output in silent mode
       logger.logStageStart({
         kind: "type-check",
         files: ["test.ts"],
@@ -57,10 +57,10 @@ Deno.test("CI Runner - silent mode logging verification", () => {
         hierarchy: null,
       });
 
-      // ログが呼ばれていないことを確認
+      // Verify that logs were not called
       assertEquals(logCalled, false);
     } finally {
-      // 元のconsole.logを復元
+      // Restore original console.log
       console.log = originalLog;
     }
   }
@@ -95,7 +95,7 @@ Deno.test("CLI Integration - parse args and create CI config", () => {
 });
 
 Deno.test("Full CI Pipeline - configuration validation", async () => {
-  // CLIパース → 設定構築 → ロガー作成の流れを確認
+  // Verify the flow: CLI parse → config building → logger creation
   const args = ["--mode", "single-file", "--log-mode", "error-files-only"];
 
   const parseResult = CLIParser.parseArgs(args);
@@ -120,12 +120,12 @@ Deno.test("Full CI Pipeline - configuration validation", async () => {
         if (runnerResult.ok) {
           const runner = runnerResult.data;
 
-          // CI Runnerの設定が正しく反映されていることを確認
-          // 実際の実行は行わず、設定値の検証のみ
+          // Verify that CI Runner configuration is correctly applied
+          // Only validate configuration values without actual execution
           assertExists(runner);
           assertEquals(typeof runner, "object");
 
-          // 設定が正しく反映されていることを確認
+          // Verify that configuration is correctly applied
           assertEquals(config.mode?.kind, "single-file");
           assertEquals(config.logMode?.kind, "error-files-only");
         }

@@ -1,8 +1,8 @@
 /**
  * Deno Local CI - CLI Parser Test
  *
- * コマンドライン引数解析のテスト
- * オプション解析とエラーハンドリングの検証
+ * Command line argument parsing tests
+ * Option parsing and error handling verification
  */
 
 import { assertEquals, assertExists } from "https://deno.land/std@0.208.0/assert/mod.ts";
@@ -169,12 +169,12 @@ Deno.test("CLIParser - build CI config with debug mode", () => {
 });
 
 Deno.test("CLIParser - build CI config with invalid debug options", () => {
-  // 直接不正な値を設定することはできないので、
-  // 代わりに不完全な debug モード設定をテスト
+  // Cannot set invalid values directly,
+  // so instead test incomplete debug mode configuration
   const options: CLIOptions = {
     logMode: "debug",
-    logLength: "L", // logKey が無い場合
-    // logKey: undefined  // コメントアウトで未設定状態をシミュレート
+    logLength: "L", // When logKey is missing
+    // logKey: undefined  // Simulate unset state with comment out
   };
 
   const result = CLIParser.buildCIConfig(options);
@@ -226,7 +226,7 @@ Deno.test("CLIParser - empty arguments", () => {
 
   assertEquals(result.ok, true);
   if (result.ok) {
-    // デフォルト値のテスト
+    // Test default values
     assertEquals(result.data.mode, undefined);
     assertEquals(result.data.help, undefined);
     assertEquals(result.data.version, undefined);

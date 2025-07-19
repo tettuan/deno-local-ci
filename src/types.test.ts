@@ -1,8 +1,8 @@
 /**
  * CI - Types Test
  *
- * 型定義とSmart Constructorのテスト
- * 全域性原則に基づく型安全性の検証
+ * Tests for type definitions and Smart Constructors
+ * Type safety verification based on totality principles
  */
 
 import { assertEquals, assertExists } from "https://deno.land/std@0.208.0/assert/mod.ts";
@@ -143,18 +143,18 @@ Deno.test("BreakdownLoggerEnvConfig - environment variable setting", () => {
 
   assertEquals(result.ok, true);
   if (result.ok) {
-    // 環境変数設定前の状態確認
+    // Check state before setting environment variables
     const beforeLogLength = Deno.env.get("LOG_LENGTH");
     const beforeLogKey = Deno.env.get("LOG_KEY");
 
-    // 環境変数設定
+    // Set environment variables
     result.data.setEnvironmentVariables();
 
-    // 設定後の確認
+    // Verify after setting
     assertEquals(Deno.env.get("LOG_LENGTH"), "W");
     assertEquals(Deno.env.get("LOG_KEY"), "TEST_KEY");
 
-    // クリーンアップ（元の状態に復元）
+    // Cleanup (restore to original state)
     if (beforeLogLength) {
       Deno.env.set("LOG_LENGTH", beforeLogLength);
     } else {
@@ -213,7 +213,7 @@ Deno.test("Discriminated Union - type safety", () => {
         assertExists(mode.stopOnFirstError);
         assertEquals(typeof mode.stopOnFirstError, "boolean");
         break;
-        // defaultケースが不要であることを型システムが保証
+        // Type system guarantees that default case is unnecessary
     }
   }
 });

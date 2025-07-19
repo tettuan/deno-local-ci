@@ -1,18 +1,18 @@
 /**
- * Local CI エラー検知統合テスト
+ * Local CI Error Detection Integration Test
  *
- * === 動的テストファイル生成について ===
- * このテストは、実行時に大量のテストファイルを動的に生成します：
- * - error_file_001.ts ~ error_file_100.ts (一時的なエラーファイル)
- * - error_test_001.test.ts ~ error_test_100.test.ts (一時的なテストファイル)
+ * === About Dynamic Test File Generation ===
+ * This test dynamically generates a large number of test files at runtime:
+ * - error_file_001.ts ~ error_file_100.ts (temporary error files)
+ * - error_test_001.test.ts ~ error_test_100.test.ts (temporary test files)
  *
- * これらのファイルは：
- * 1. テスト開始時に動的生成される
- * 2. テスト終了時に自動削除される (cleanup()で完全除去)
- * 3. git管理外の一時ファイルである
- * 4. フォールバック機能のテストに使用される
+ * These files are:
+ * 1. Dynamically generated at test start
+ * 2. Automatically deleted at test end (completely removed by cleanup())
+ * 3. Temporary files not managed by git
+ * 4. Used for testing fallback functionality
  *
- * 目的：local_ciが正しくエラーを検知し、フォールバック処理が動作するかをテストする
+ * Purpose: Test whether local_ci correctly detects errors and fallback processing works
  */
 
 import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";

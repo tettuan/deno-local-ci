@@ -237,14 +237,14 @@ Deno.test("CILogger - debug mode with breakdown logger", () => {
       // BreakdownLogger environment variable setting
       logger.setupBreakdownLogger();
 
-      // 設定確認
+      // Verify configuration
       assertEquals(Deno.env.get("LOG_LENGTH"), "W");
       assertEquals(Deno.env.get("LOG_KEY"), "CI_DEBUG");
 
-      // デバッグログテスト
+      // Debug log test
       logger.logDebug("Debug information", { test: "data" });
 
-      // 環境変数復元
+      // Restore environment variables
       if (originalLogLength) {
         Deno.env.set("LOG_LENGTH", originalLogLength);
       } else {
@@ -267,13 +267,13 @@ Deno.test("CILogger - log warning and error", () => {
   if (loggerResult.ok) {
     const logger = loggerResult.data;
 
-    // 警告ログテスト
+    // Warning log test
     logger.logWarning("This is a warning message");
 
-    // エラーログテスト
+    // Error log test
     logger.logError("This is an error message");
 
-    // デバッグ付きエラーログテスト
+    // Error log test with debug information
     logger.logError("Error with details", new Error("Detailed error info"));
   }
 });
@@ -296,17 +296,17 @@ Deno.test("CILogger - BreakdownLogger integration", () => {
         // BreakdownLogger environment variable setting
         logger.setupBreakdownLogger();
 
-        // 設定確認
+        // Verify configuration
         assertEquals(Deno.env.get("LOG_LENGTH"), "L");
         assertEquals(Deno.env.get("LOG_KEY"), "CI_BREAKDOWN_TEST");
 
-        // BreakdownLoggerを使用したログテスト
-        // 出力は実際にBreakdownLoggerによってタイムスタンプ付きで表示される
+        // Log tests using BreakdownLogger
+        // Output will be displayed with timestamps by BreakdownLogger
         logger.logDebug("BreakdownLogger integration test");
         logger.logWarning("BreakdownLogger warning test");
         logger.logError("BreakdownLogger error test");
       } finally {
-        // クリーンアップ（元の状態に復元）
+        // Cleanup (restore to original state)
         if (originalLogLength) {
           Deno.env.set("LOG_LENGTH", originalLogLength);
         } else {

@@ -1,7 +1,7 @@
 /**
  * # Domain Events Test
  *
- * ドメインイベントとイベントバスの機能テスト
+ * Domain events and event bus functionality tests
  */
 
 import { assertEquals, assertExists } from "https://deno.land/std@0.208.0/assert/mod.ts";
