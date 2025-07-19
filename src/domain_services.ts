@@ -25,8 +25,8 @@ export class ExecutionStrategyService {
     config: CIConfig,
   ): Result<ExecutionStrategy, ValidationError & { message: string }> {
     const defaultMode: ExecutionMode = {
-      kind: "single-file",
-      stopOnFirstError: true,
+      kind: "all",
+      projectDirectories: [],
       hierarchy: config.hierarchy || null,
     };
     return ExecutionStrategy.create(
