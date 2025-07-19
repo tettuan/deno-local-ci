@@ -1,8 +1,8 @@
 /**
  * Deno Local CI - Core Integration Test
  *
- * CI全体の統合テスト
- * 実際のCI実行フローの検証
+ * CI overall integration test
+ * Verification of actual CI execution flow
  */
 
 import { assertEquals, assertExists } from "https://deno.land/std@0.208.0/assert/mod.ts";
@@ -11,7 +11,7 @@ import { CILogger, LogModeFactory } from "../../src/logger.ts";
 import { CLIParser } from "../../src/cli_parser.ts";
 
 Deno.test("CI Runner - create and initialize", async () => {
-  const mode = LogModeFactory.silent(); // テスト中は静かに
+  const mode = LogModeFactory.silent(); // Stay quiet during tests
   const loggerResult = CILogger.create(mode);
 
   assertEquals(loggerResult.ok, true);
@@ -19,7 +19,7 @@ Deno.test("CI Runner - create and initialize", async () => {
   if (loggerResult.ok) {
     const logger = loggerResult.data;
 
-    // 現在のプロジェクトディレクトリでCIRunner作成
+    // Create CIRunner in current project directory
     const runnerResult = await CIRunner.create(logger, {}, Deno.cwd());
 
     assertEquals(runnerResult.ok, true);

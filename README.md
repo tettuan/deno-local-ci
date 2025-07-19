@@ -42,95 +42,95 @@ deno run --allow-read --allow-write --allow-run --allow-env https://raw.githubus
 
 ### Command Line Interface (Main Use Case)
 
-@aidevtool/ciは**CLIツールとしての使用がメインユースケース**です。プロジェクトのルートディレクトリで以下のコマンドを実行してください：
+**@aidevtool/ci is primarily designed as a CLI tool.** Run the following commands in your project's root directory:
 
-#### 基本的な使用方法
+#### Basic Usage
 
 ```bash
-# デフォルト設定で実行（全ファイル同時実行モード - 最高速）
+# Run with default settings (all-files mode - fastest)
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci
 ```
 
-#### 実行モード別の使用例
+#### Execution Mode Examples
 
 ```bash
-# 全ファイル同時実行：最高速（デフォルト）
+# All mode: fastest execution (default)
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode all
 
-# バッチモード：パフォーマンスと安全性のバランス
+# Batch mode: balanced performance and safety
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode batch --batch-size 10
 
-# シングルファイルモード：最も安全で詳細なエラー報告
+# Single-file mode: safest with detailed error reporting
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode single-file
 ```
 
-#### ログレベル別の使用例
+#### Log Level Examples
 
 ```bash
-# 通常モード：標準的な出力
+# Normal mode: standard output
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --log-mode normal
 
-# サイレントモード：最小限の出力（CI/CD環境に最適）
+# Silent mode: minimal output (optimal for CI/CD environments)
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --log-mode silent
 
-# エラーファイルのみ表示：エラーの特定に最適
+# Error-files-only mode: optimal for error identification
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --log-mode error-files-only
 
-# デバッグモード：詳細なログとBreakdownLogger統合
+# Debug mode: detailed logs with BreakdownLogger integration
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --log-mode debug --log-key CI_DEBUG --log-length M
 ```
 
-#### 階層指定実行
+#### Directory-Specific Execution
 
-特定のディレクトリ階層のみを対象としたCI実行が可能です：
+You can target specific directory hierarchies for CI execution:
 
 ```bash
-# src/ディレクトリのみを対象とした実行（位置引数）
+# Execute only src/ directory (positional argument)
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci src/
 
-# lib/ディレクトリのみを対象とした実行（--hierarchyオプション）
+# Execute only lib/ directory (--hierarchy option)
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --hierarchy lib/
 
-# tests/core/ディレクトリのみを対象とした実行
+# Execute only tests/core/ directory
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci tests/core/
 
-# 階層指定とモード組み合わせ（src/配下をバッチモードで実行）
+# Combine hierarchy and mode (execute src/ in batch mode)
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --hierarchy src/ --mode batch
 
-# 階層指定とログモード組み合わせ（lib/配下をデバッグモードで実行）
+# Combine hierarchy and log mode (execute lib/ in debug mode)
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci lib/ --log-mode error-files-only
 ```
 
-#### 高度な使用例
+#### Advanced Usage Examples
 
 ```bash
-# フォールバックを無効化してバッチモードを強制
+# Disable fallback and force batch mode
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode batch --no-fallback
 
-# 特定のパターンのテストファイルのみ実行
+# Execute only specific pattern test files
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --filter "*integration*"
 
-# 最初のエラーで停止
+# Stop on first error
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --stop-on-first-error
 
-# 作業ディレクトリを指定
+# Specify working directory
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --cwd /path/to/project
 
-# JSRチェックでdirtyな状態を許可
+# Allow dirty state for JSR check
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --allow-dirty
 ```
 
 ### Programmatic Usage (Advanced)
 
-プログラムから直接使用する場合（高度な用途）：
+For direct programmatic usage (advanced use cases):
 
 ```typescript
 import { CILogger, CIRunner, CLIParser, LogModeFactory, main } from "@aidevtool/ci";
 
-// シンプルな使用方法 - デフォルト設定でCI実行
+// Simple usage - run CI with default settings
 await main(["--mode", "batch"]);
 
-// 高度な使用方法 - CI設定の完全制御
+// Advanced usage - full control over CI configuration
 const parseResult = CLIParser.parseArgs(["--mode", "single-file", "--log-mode", "debug"]);
 if (parseResult.ok) {
   const configResult = CLIParser.buildCIConfig(parseResult.data);
@@ -184,55 +184,55 @@ const projectFiles = await discovery.discoverProjectFiles("./src");
 console.log(`Found ${projectFiles.testFiles.length} test files`);
 ```
 
-## 🔧 コマンドライン引数オプション
+## 🔧 Command Line Options
 
-| オプション                   | 説明                                                        | デフォルト値         | 例                          |
+| Option                       | Description                                                 | Default Value        | Example                     |
 | ---------------------------- | ----------------------------------------------------------- | -------------------- | --------------------------- |
-| `--mode <mode>`              | 実行モード: `all`, `batch`, `single-file`（実行速度順）     | `all`                | `--mode batch`              |
-| `--hierarchy <path>`         | 対象ディレクトリ階層の指定（特定ディレクトリのみ実行）      | プロジェクト全体     | `--hierarchy src/`          |
-| `--dir <path>`               | 階層指定のエイリアス（`--hierarchy`と同じ）                 | プロジェクト全体     | `--dir lib/`                |
-| `<path>`                     | 位置引数での階層指定（オプションなしで直接パス指定）        | プロジェクト全体     | `src/components/`           |
-| `--batch-size <size>`        | バッチあたりのファイル数 (1-100)                            | `25`                 | `--batch-size 10`           |
-| `--fallback`                 | 実行戦略のフォールバックを有効化                            | `true`               | `--fallback`                |
-| `--no-fallback`              | 実行戦略のフォールバックを無効化                            | -                    | `--no-fallback`             |
-| `--log-mode <mode>`          | ログモード: `normal`, `silent`, `debug`, `error-files-only` | `normal`             | `--log-mode debug`          |
-| `--log-key <key>`            | BreakdownLoggerキー（デバッグモード必須）                   | -                    | `--log-key CI_DEBUG`        |
-| `--log-length <length>`      | BreakdownLogger長さ: `W`, `M`, `L`（デバッグモード必須）    | -                    | `--log-length M`            |
-| `--stop-on-first-error`      | 最初のエラーで実行を停止                                    | `false`              | `--stop-on-first-error`     |
-| `--continue-on-error`        | エラー後も実行を継続                                        | `true`               | `--continue-on-error`       |
-| `--allow-dirty`              | JSRチェックでdirtyな作業ディレクトリを許可                  | `false`              | `--allow-dirty`             |
-| `--filter <pattern>`         | テストファイルをパターンでフィルタ                          | -                    | `--filter "*integration*"`  |
-| `--cwd <path>`               | 作業ディレクトリを指定                                      | カレントディレクトリ | `--cwd /path/to/project`    |
-| `--working-directory <path>` | 作業ディレクトリを指定（`--cwd`のエイリアス）               | カレントディレクトリ | `--working-directory ./src` |
-| `--help, -h`                 | ヘルプメッセージを表示                                      | -                    | `--help`                    |
-| `--version, -v`              | バージョン情報を表示                                        | -                    | `--version`                 |
+| `--mode <mode>`              | Execution mode: `all`, `batch`, `single-file` (speed order) | `all`                | `--mode batch`              |
+| `--hierarchy <path>`         | Target directory hierarchy (execute specific directory only) | Entire project       | `--hierarchy src/`          |
+| `--dir <path>`               | Alias for hierarchy specification (same as `--hierarchy`)   | Entire project       | `--dir lib/`                |
+| `<path>`                     | Positional argument for hierarchy (direct path without option) | Entire project       | `src/components/`           |
+| `--batch-size <size>`        | Number of files per batch (1-100)                          | `25`                 | `--batch-size 10`           |
+| `--fallback`                 | Enable execution strategy fallback                         | `true`               | `--fallback`                |
+| `--no-fallback`              | Disable execution strategy fallback                        | -                    | `--no-fallback`             |
+| `--log-mode <mode>`          | Log mode: `normal`, `silent`, `debug`, `error-files-only`  | `normal`             | `--log-mode debug`          |
+| `--log-key <key>`            | BreakdownLogger key (required for debug mode)              | -                    | `--log-key CI_DEBUG`        |
+| `--log-length <length>`      | BreakdownLogger length: `W`, `M`, `L` (required for debug) | -                    | `--log-length M`            |
+| `--stop-on-first-error`      | Stop execution on first error                              | `false`              | `--stop-on-first-error`     |
+| `--continue-on-error`        | Continue execution after errors                            | `true`               | `--continue-on-error`       |
+| `--allow-dirty`              | Allow dirty working directory for JSR check               | `false`              | `--allow-dirty`             |
+| `--filter <pattern>`         | Filter test files by pattern                               | -                    | `--filter "*integration*"`  |
+| `--cwd <path>`               | Specify working directory                                   | Current directory    | `--cwd /path/to/project`    |
+| `--working-directory <path>` | Specify working directory (alias for `--cwd`)              | Current directory    | `--working-directory ./src` |
+| `--help, -h`                 | Display help message                                        | -                    | `--help`                    |
+| `--version, -v`              | Display version information                                 | -                    | `--version`                 |
 
-### オプションの組み合わせ例
+### Option Combination Examples
 
 ```bash
-# 高速実行（CI/CD環境向け）
+# Fast execution (for CI/CD environments)
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode all --log-mode silent
 
-# 開発環境での詳細デバッグ
+# Detailed debugging in development environment
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode single-file --log-mode debug --log-key DEV --log-length L
 
-# 中規模プロジェクト向けバランス設定
+# Balanced settings for medium-sized projects
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode batch --batch-size 15 --log-mode error-files-only
 
-# 特定のテストのみ実行（統合テスト）
+# Execute specific tests only (integration tests)
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --filter "*integration*" --stop-on-first-error
 
-# dirtyな状態でのJSR互換性チェック
+# JSR compatibility check with dirty state
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --allow-dirty --log-mode normal
 
-# 階層指定の組み合わせ例
-# src/配下のみを高速チェック
+# Hierarchy specification combination examples
+# Fast check for src/ directory only
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci src/ --mode all --log-mode silent
 
-# lib/配下をバッチモードで詳細チェック
+# Detailed batch check for lib/ directory
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --hierarchy lib/ --mode batch --log-mode error-files-only
 
-# tests/配下をシングルファイルモードでデバッグ
+# Debug tests/ directory in single-file mode
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci tests/ --mode single-file --log-mode debug --log-key TEST --log-length M
 ```
 
@@ -249,85 +249,85 @@ The CI runner executes the following stages in order:
 Each stage must pass before proceeding to the next. On failure, the pipeline stops and reports
 detailed error information.
 
-## 🗂️ 階層指定機能（Directory Hierarchy Targeting）
+## 🗂️ Directory Hierarchy Targeting
 
-特定のディレクトリ階層のみを対象としたCI実行により、大規模プロジェクトでの効率的な開発が可能です。
+Efficient development for large projects is possible by targeting specific directory hierarchies for CI execution.
 
-### 階層指定の基本的な使用方法
+### Basic Usage of Hierarchy Specification
 
 ```bash
-# 位置引数での階層指定（推奨）
+# Hierarchy specification with positional argument (recommended)
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci src/
 
-# --hierarchyオプションでの階層指定
+# Hierarchy specification with --hierarchy option
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --hierarchy lib/
 
-# --dirオプション（--hierarchyのエイリアス）
+# --dir option (alias for --hierarchy)
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --dir tests/core/
 ```
 
-### 階層指定時の動作
+### Behavior When Hierarchy is Specified
 
-#### ✅ 実行対象となるステージ
+#### ✅ Stages That Will Execute
 
-1. **Type Check**: `deno check <階層>/` - 指定階層内のTypeScriptファイルの型チェック
-2. **JSR Check**: **自動スキップ** - JSRパッケージチェックは常にプロジェクト全体が対象のため
-3. **Test**: `deno test <階層>/` - 指定階層内のテストファイルのみ実行
-4. **Lint**: `deno lint <階層>/` - 指定階層内のファイルのリント
-5. **Format**: `deno fmt --check <階層>/` - 指定階層内のファイルのフォーマットチェック
+1. **Type Check**: `deno check <hierarchy>/` - Type check TypeScript files within specified hierarchy
+2. **JSR Check**: **Automatically skipped** - JSR package check always targets the entire project
+3. **Test**: `deno test <hierarchy>/` - Execute only test files within specified hierarchy
+4. **Lint**: `deno lint <hierarchy>/` - Lint files within specified hierarchy
+5. **Format**: `deno fmt --check <hierarchy>/` - Format check files within specified hierarchy
 
-#### 🎯 対象ファイル（階層指定時）
+#### 🎯 Target Files (When Hierarchy is Specified)
 
-- **TypeScript files**: `<階層>/**/*.ts`, `<階層>/**/*.tsx`, `<階層>/**/*.d.ts`
-- **Test files**: `<階層>/**/*_test.ts`, `<階層>/**/*.test.ts`
-- **All source files**: 階層内のすべてのTypeScriptファイル
+- **TypeScript files**: `<hierarchy>/**/*.ts`, `<hierarchy>/**/*.tsx`, `<hierarchy>/**/*.d.ts`
+- **Test files**: `<hierarchy>/**/*_test.ts`, `<hierarchy>/**/*.test.ts`
+- **All source files**: All TypeScript files within the hierarchy
 
-### 実用的な階層指定例
+### Practical Hierarchy Specification Examples
 
 ```bash
-# フロントエンド関連のみをチェック
+# Check frontend-related files only
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci src/components/
 
-# バックエンドAPIのみをチェック
+# Check backend API only
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci src/api/
 
-# 特定のサービス層のみをチェック
+# Check specific service layer only
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci src/services/user/
 
-# テストディレクトリのみをチェック
+# Check test directory only
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci tests/integration/
 
-# ユーティリティモジュールのみをチェック
+# Check utility modules only
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci lib/utils/
 ```
 
-### 階層指定と実行モードの組み合わせ
+### Combining Hierarchy Specification and Execution Modes
 
 ```bash
-# src/配下をバッチモードで実行（中規模プロジェクト向け）
+# Execute src/ in batch mode (for medium-sized projects)
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci src/ --mode batch --batch-size 15
 
-# lib/配下をシングルファイルモードでデバッグ
+# Debug lib/ in single-file mode
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci lib/ --mode single-file --log-mode debug --log-key LIB --log-length M
 
-# tests/配下のエラーファイルのみ確認
+# Check only error files in tests/
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci tests/ --log-mode error-files-only
 ```
 
-### 階層指定のメリット
+### Benefits of Hierarchy Specification
 
-- **🚀 高速実行**: 必要な部分のみをチェックして開発サイクルを高速化
-- **🎯 集中開発**: 作業中のモジュールに集中した検証
-- **📊 効率的デバッグ**: 問題のある階層を特定してピンポイントで修正
-- **⚡ CI最適化**: 変更された階層のみをチェックしてCI時間を短縮
-- **🔍 段階的検証**: 段階的にコードを検証して品質を向上
+- **🚀 Fast Execution**: Accelerate development cycle by checking only necessary parts
+- **🎯 Focused Development**: Concentrated verification on modules being worked on
+- **📊 Efficient Debugging**: Identify problematic hierarchies and fix them precisely
+- **⚡ CI Optimization**: Reduce CI time by checking only changed hierarchies
+- **🔍 Gradual Verification**: Improve quality through gradual code verification
 
-### 注意事項
+### Important Notes
 
-- **JSR Check自動スキップ**: 階層指定時はJSRチェックが自動的にスキップされます
-- **相対パス対応**: 相対パス・絶対パスの両方をサポート
-- **存在チェック**: 存在しない階層を指定した場合は適切なエラーメッセージを表示
-- **フォールバック継承**: 階層指定時も実行モードのフォールバック機能は継続して動作
+- **JSR Check Auto-Skip**: JSR check is automatically skipped when hierarchy is specified
+- **Relative Path Support**: Supports both relative and absolute paths
+- **Existence Check**: Shows appropriate error message when non-existent hierarchy is specified
+- **Fallback Inheritance**: Execution mode fallback functionality continues to work with hierarchy specification
 
 ## 📊 実行モード詳細
 

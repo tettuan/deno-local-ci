@@ -1,8 +1,8 @@
 /**
  * Deno Local CI - Logger Test
  *
- * ログ出力機能のテスト
- * 各ログモードとBreakdownLogger統合の検証
+ * Testing log output functionality
+ * Verification of each log mode and BreakdownLogger integration
  */
 
 import { assertEquals, assertExists } from "https://deno.land/std@0.208.0/assert/mod.ts";
@@ -66,13 +66,13 @@ Deno.test("CILogger - create with debug mode requires breakdown config", () => {
 });
 
 Deno.test("CILogger - create debug mode without breakdown config fails", () => {
-  // LogModeのdebugモードでは常にbreakdownLoggerEnvが必要
+  // LogMode debug mode always requires breakdownLoggerEnv
   const breakdownResult = BreakdownLoggerEnvConfig.create("L", "TEST");
 
   if (breakdownResult.ok) {
     const mode = LogModeFactory.debug(breakdownResult.data);
 
-    // breakdownConfig無しでCILoggerを作成してエラーテスト
+    // Test creating CILogger without breakdownConfig for error testing
     const result = CILogger.create(mode, undefined);
 
     assertEquals(result.ok, false);
@@ -89,7 +89,7 @@ Deno.test("CILogger - log stage start and result (normal mode)", () => {
   if (loggerResult.ok) {
     const logger = loggerResult.data;
 
-    // テスト用のCI段階
+    // Test CI stages
     const stage: CIStage = {
       kind: "type-check",
       files: ["src/main.ts", "src/utils.ts"],
@@ -97,7 +97,7 @@ Deno.test("CILogger - log stage start and result (normal mode)", () => {
       hierarchy: null,
     };
 
-    // ログ出力テスト（実際の出力は目視確認用）
+    // Log output test (actual output for visual verification)
     logger.logStageStart(stage);
 
     const successResult: StageResult = {
@@ -132,7 +132,7 @@ Deno.test("CILogger - log error files", () => {
       errors: ["Assertion failed", "Timeout error"],
     };
 
-    // エラーファイル表示テスト
+    // Error file display test
     logger.logErrorFiles(error);
   }
 });
@@ -144,7 +144,7 @@ Deno.test("CILogger - log fallback", () => {
   if (loggerResult.ok) {
     const logger = loggerResult.data;
 
-    // フォールバック通知テスト
+    // Fallback notification test
     logger.logFallback("all", "batch", "All mode failed due to test errors");
   }
 });
@@ -156,10 +156,10 @@ Deno.test("CILogger - log summary", () => {
   if (loggerResult.ok) {
     const logger = loggerResult.data;
 
-    // サマリー表示テスト（基本版）
+    // Summary display test (basic version)
     logger.logSummary(5, 3, 2, 45000);
 
-    // サマリー表示テスト（詳細統計版）
+    // Summary display test (detailed statistics version)
     const detailedStats = {
       stages: { total: 5, successful: 3, failed: 2, skipped: 0 },
       files: {

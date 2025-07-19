@@ -85,7 +85,7 @@ export class CIRunner {
   private readonly config: CIConfig;
   private readonly projectRoot: string;
 
-  // 統計情報追跡用
+  // Statistics tracking
   private stats: {
     filesProcessed: Set<string>;
     testsRun: number;
@@ -111,7 +111,7 @@ export class CIRunner {
   }
 
   /**
-   * CIRunner作成
+   * Create CIRunner instance
    */
   static async create(
     logger: CILogger,
@@ -133,7 +133,7 @@ export class CIRunner {
   }
 
   /**
-   * CI全体実行
+   * Execute full CI pipeline
    */
   async run(): Promise<CIExecutionResult> {
     const startTime = performance.now();
@@ -146,7 +146,7 @@ export class CIRunner {
     });
 
     try {
-      // ファイル発見
+      // File discovery
       const filesResult = await this.discoverFiles();
       if (!filesResult.ok) {
         const errorStage: CIStage = {
@@ -178,14 +178,14 @@ export class CIRunner {
 
       const { testFiles, typeCheckFiles } = filesResult.data;
 
-      // CI段階実行
+      // Execute CI stages
       const stages = this.createStages(testFiles, typeCheckFiles);
 
       for (const stage of stages) {
         const stageResult = await this.executeStage(stage);
         completedStages.push(stageResult);
 
-        this.updateFileStats(stage); // 統計情報の更新
+        this.updateFileStats(stage); // Update statistics
 
         if (stageResult.kind === "failure") {
           const error = ErrorClassificationService.classifyError({
@@ -242,7 +242,7 @@ export class CIRunner {
     }
   }
 
-  // === プライベートメソッド ===
+  // === Private Methods ===
 
   private async discoverFiles(): Promise<
     Result<{
@@ -250,7 +250,7 @@ export class CIRunner {
       typeCheckFiles: string[];
     }, ValidationError & { message: string }>
   > {
-    // 階層が指定されている場合、その階層のみを対象とする
+    // If hierarchy is specified, target only that hierarchy
     const targetDirectory = this.config.hierarchy ? this.config.hierarchy : this.projectRoot;
 
     const testFilesResult = await ProjectFileDiscovery.findTestFiles(targetDirectory);
@@ -275,19 +275,19 @@ export class CIRunner {
     const stages: CIStage[] = [];
     const hierarchy = this.config.hierarchy;
 
-    // Type Check段階
+    // Type Check stage
     stages.push(
       CIPipelineOrchestrator.createStage("type-check", typeCheckFiles, undefined, hierarchy),
     );
 
-    // JSR Check段階 - 階層指定時はスキップ
+    // JSR Check stage - skip when hierarchy is specified
     if (!hierarchy) {
       stages.push(CIPipelineOrchestrator.createStage("jsr-check", [], undefined, hierarchy));
     } else {
       this.logger.logDebug("JSR Check skipped due to hierarchy specification", { hierarchy });
     }
 
-    // Test実行段階
+    // Test execution stage
     const strategyResult = ExecutionStrategyService.determineStrategy(this.config);
     if (strategyResult.ok && testFiles.length > 0) {
       stages.push(
@@ -300,12 +300,12 @@ export class CIRunner {
       );
     }
 
-    // Lint段階
+    // Lint stage
     stages.push(
       CIPipelineOrchestrator.createStage("lint-check", typeCheckFiles, undefined, hierarchy),
     );
 
-    // Format段階
+    // Format stage
     stages.push(
       CIPipelineOrchestrator.createStage("format-check", typeCheckFiles, undefined, hierarchy),
     );
@@ -318,7 +318,7 @@ export class CIRunner {
 
     this.logger.logStageStart(stage);
 
-    // ファイル統計の更新
+    // Update file statistics
     this.updateFileStats(stage);
 
     try {
@@ -356,7 +356,7 @@ export class CIRunner {
       throw new Error("Invalid stage type for type check");
     }
 
-    // 設定から実行戦略を決定
+    // Determine execution strategy from configuration
     const strategyResult = ExecutionStrategyService.determineStrategy(this.config);
     if (!strategyResult.ok) {
       const failureResult: StageResult = {
@@ -386,22 +386,22 @@ export class CIRunner {
         ? result.data.stderr
         : (String(result.error) || "Unknown error");
 
-      // フォールバック試行
+      // Attempt fallback
       if (strategy.fallbackEnabled) {
-        // 失敗したバッチ情報を抽出（型安全に）
+        // Extract failed batch information (type-safe)
         let failedBatch: { startIndex: number; endIndex: number; files: string[] } | undefined;
         if ("failedBatch" in result) {
           failedBatch = result.failedBatch;
         }
 
-        // フォールバックを試行してエラーの詳細特定を行う
+        // Attempt fallback to identify detailed errors
         await this.attemptTypeCheckFallback(
           strategy,
           stage.files,
           errorOutput,
           failedBatch,
         );
-        // フォールバックは詳細なエラー特定のみで、結果は常に失敗として扱う
+        // Fallback is only for detailed error identification, result is always treated as failure
       }
 
       const failureResult: StageResult = {

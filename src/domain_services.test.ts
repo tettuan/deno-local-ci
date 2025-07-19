@@ -1,8 +1,8 @@
 /**
  * Deno Local CI - Domain Services Test
  *
- * ドメインサービスの動作検証
- * 実行戦略決定、フォールバック処理、エラー分類のテスト
+ * Domain service behavior verification
+ * Testing execution strategy determination, fallback processing, and error classification
  */
 
 import { assertEquals, assertExists } from "https://deno.land/std@0.208.0/assert/mod.ts";
