@@ -357,7 +357,7 @@ export class CILogger {
           // 実際のテストファイルを表示
           testArgs.push(...stage.files);
         } else {
-          testArgs.push("**/*test.ts");
+          testArgs.push(".");
         }
         return testArgs.join(" ");
       }
