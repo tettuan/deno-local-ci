@@ -528,13 +528,13 @@ export class CIRunner {
   ) {
     switch (strategy.mode.kind) {
       case "all":
-        console.log(`[ALL] Processing all ${testFiles.length} files together`);
+        this.logger.logInfo(`[ALL] Processing all ${testFiles.length} files together`);
         return await DenoCommandRunner.test(testFiles, { hierarchy });
 
       case "batch": {
         // 型安全なバッチ実行
         const batchSize = strategy.mode.batchSize;
-        console.log(
+        this.logger.logInfo(
           `[BATCH] Processing ${testFiles.length} files in batches of ${batchSize}`,
         );
 
@@ -543,44 +543,44 @@ export class CIRunner {
           const batchNumber = Math.floor(i / batchSize) + 1;
           const totalBatches = Math.ceil(testFiles.length / batchSize);
 
-          console.log(
+          this.logger.logInfo(
             `[BATCH] Executing batch ${batchNumber}/${totalBatches}: ${batch.join(", ")}`,
           );
 
           // バッチ内の各ファイルを明示的に指定して実行
           const result = await DenoCommandRunner.test(batch, { hierarchy });
           if (!result.ok || !result.data.success) {
-            console.log(`[BATCH] Batch ${batchNumber} failed`);
+            this.logger.logInfo(`[BATCH] Batch ${batchNumber} failed`);
             // 失敗したバッチ情報を含める（フォールバック用）
             return {
               ...result,
               failedBatch: { startIndex: i, endIndex: i + batchSize - 1, files: batch },
             };
           }
-          console.log(`[BATCH] Batch ${batchNumber} completed successfully`);
+          this.logger.logInfo(`[BATCH] Batch ${batchNumber} completed successfully`);
         }
-        console.log(
+        this.logger.logInfo(
           `[BATCH] All ${Math.ceil(testFiles.length / batchSize)} batches processed successfully`,
         );
         return await DenoCommandRunner.test([], { hierarchy }); // 成功を示す空の実行
       }
       case "single-file": {
         // 全域性原則：各ファイルを個別実行し、エラー時はstopOnFirstErrorに従う
-        console.log(`[SINGLE-FILE] Processing ${testFiles.length} files individually`);
+        this.logger.logInfo(`[SINGLE-FILE] Processing ${testFiles.length} files individually`);
 
         for (const file of testFiles) {
-          console.log(`[SINGLE-FILE] Executing: ${file}`);
+          this.logger.logInfo(`[SINGLE-FILE] Executing: ${file}`);
           const result = await DenoCommandRunner.test([file], { hierarchy });
           if (!result.ok || !result.data.success) {
             if (strategy.mode.stopOnFirstError) {
-              console.log(`[SINGLE-FILE] Stopping on first error at ${file}`);
+              this.logger.logInfo(`[SINGLE-FILE] Stopping on first error at ${file}`);
               return result;
             }
-            console.log(`[SINGLE-FILE] Continuing after error in ${file}`);
+            this.logger.logInfo(`[SINGLE-FILE] Continuing after error in ${file}`);
             // stopOnFirstError = false の場合は継続実行
           }
         }
-        console.log(
+        this.logger.logInfo(
           `[SINGLE-FILE] All ${testFiles.length} files processed successfully`,
         );
         return await DenoCommandRunner.test([], { hierarchy }); // 成功を示す空の実行
@@ -776,7 +776,7 @@ export class CIRunner {
   ) {
     switch (strategy.mode.kind) {
       case "all":
-        console.log(`[TYPECHECK-ALL] Processing all ${files.length} files together`);
+        this.logger.logInfo(`[TYPECHECK-ALL] Processing all ${files.length} files together`);
         return await DenoCommandRunner.typeCheck(files);
 
       case "batch": {

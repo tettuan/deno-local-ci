@@ -28,7 +28,7 @@ Deno.test("ExecutionStrategyService - determine default strategy", () => {
 
   assertEquals(result.ok, true);
   if (result.ok) {
-    assertEquals(result.data.mode.kind, "single-file");
+    assertEquals(result.data.mode.kind, "all");
     assertEquals(result.data.fallbackEnabled, true);
   }
 });

@@ -192,7 +192,7 @@ export class CILogger {
     totalDuration: number,
     stats?: CISummaryStats,
   ): void {
-    if (this.mode.kind === "error-files-only") return;
+    if (this.mode.kind === "error-files-only" || this.mode.kind === "silent") return;
 
     console.log("\n" + "=".repeat(50));
     console.log("CI Execution Summary");
@@ -280,7 +280,7 @@ export class CILogger {
   }
 
   /**
-   * エラーログ
+   * エラーログ（silent モードでも出力）
    */
   logError(message: string, error?: unknown): void {
     if (this.breakdownLogger) {
@@ -293,6 +293,19 @@ export class CILogger {
       if (error && this.mode.kind === "debug") {
         console.error(error);
       }
+    }
+  }
+
+  /**
+   * 情報ログ（silent モードでは出力しない）
+   */
+  logInfo(message: string): void {
+    if (this.mode.kind === "silent") return;
+
+    if (this.breakdownLogger) {
+      this.breakdownLogger.info(message);
+    } else {
+      console.log(message);
     }
   }
 

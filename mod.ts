@@ -209,9 +209,32 @@ export async function main(args: string[]): Promise<void> {
 
     const config = configResult.data;
 
-    // Create logger
-    const logMode = LogModeFactory.normal();
-    const loggerResult = CILogger.create(logMode);
+    // Create logger with appropriate mode
+    let logMode;
+    switch (options.logMode) {
+      case "silent":
+        logMode = LogModeFactory.silent();
+        break;
+      case "debug":
+        if (!options.logLength || !options.logKey) {
+          console.error("❌ Debug mode requires --log-length and --log-key options");
+          Deno.exit(1);
+        }
+        if (!config.breakdownLoggerConfig) {
+          console.error("❌ BreakdownLogger configuration is missing for debug mode");
+          Deno.exit(1);
+        }
+        logMode = LogModeFactory.debug(config.breakdownLoggerConfig);
+        break;
+      case "error-files-only":
+        logMode = LogModeFactory.errorFilesOnly();
+        break;
+      default:
+        logMode = LogModeFactory.normal();
+        break;
+    }
+
+    const loggerResult = CILogger.create(logMode, config.breakdownLoggerConfig);
     if (!loggerResult.ok) {
       console.error("❌ Logger creation failed:", loggerResult.error.message);
       Deno.exit(1);
@@ -230,9 +253,11 @@ export async function main(args: string[]): Promise<void> {
     const result = await runner.run();
 
     if (result.success) {
-      console.log("✅ CI passed successfully");
-      console.log(`✅ CI completed successfully in ${result.totalDuration}ms`);
-      console.log(`📊 Completed stages: ${result.completedStages.length}`);
+      if (options.logMode !== "silent") {
+        console.log("✅ CI passed successfully");
+        console.log(`✅ CI completed successfully in ${result.totalDuration}ms`);
+        console.log(`📊 Completed stages: ${result.completedStages.length}`);
+      }
     } else {
       console.error("❌ CI failed");
       console.error(`❌ CI failed: ${result.errorDetails?.kind || "Unknown error"}`);
