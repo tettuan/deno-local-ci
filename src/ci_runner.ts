@@ -34,7 +34,7 @@ import {
   StageInternalFallbackService,
 } from "./domain_services.ts";
 
-import { DenoCommandRunner } from "./process_runner.ts";
+import { DenoCommandRunner, extractTestSummaryLine } from "./process_runner.ts";
 import { ProjectFileDiscovery } from "./file_system.ts";
 import { CILogger } from "./logger.ts";
 
@@ -488,14 +488,24 @@ export class CIRunner {
 
     // Update test statistics
     if (result.ok) {
+      console.log("=== UPDATING TEST STATS ===");
+      console.log("Result data testStats:", result.data.testStats);
       this.updateTestStats(result.data, testFiles);
+      console.log("Stats after update - testsRun:", this.stats.testsRun);
+      console.log("Stats after update - testsPassed:", this.stats.testsPassed);
+      console.log("Stats after update - testsFailed:", this.stats.testsFailed);
+      console.log("===========================");
     }
 
     if (result.ok && result.data.success) {
+      // テスト出力からサマリー行を抽出
+      const testSummary = extractTestSummaryLine(result.data.stdout + result.data.stderr);
+
       const successResult: StageResult = {
         kind: "success",
         stage,
         duration,
+        testSummary,
       };
       this.logger.logStageResult(successResult);
       return successResult;
@@ -1076,20 +1086,38 @@ export class CIRunner {
   }
 
   /**
-   * テスト実行結果から統計を更新
+   * テスト実行結果から統計を更新（実際のテスト結果解析）
    */
   private updateTestStats(result: ProcessResult, testFiles: string[]): void {
-    // 実際のテスト実行結果を基に統計を更新
-    testFiles.forEach((file) => this.stats.filesProcessed.add(file));
+    // 実際のテスト統計が利用可能な場合はそれを使用
+    if (result.testStats) {
+      this.stats.testsRun = result.testStats.testsRun;
+      this.stats.testsPassed = result.testStats.testsPassed;
+      this.stats.testsFailed = result.testStats.testsFailed;
 
-    if (result.success) {
-      // 成功したテストファイル数を概算
-      this.stats.testsRun += testFiles.length;
-      this.stats.testsPassed += testFiles.length;
+      // ファイル数も実際の実行結果から取得
+      if (result.testStats.filesRun > 0) {
+        // 実行されたファイル数が分かる場合は、テストファイルリストよりも正確
+        for (let i = 0; i < result.testStats.filesRun; i++) {
+          this.stats.filesProcessed.add(testFiles[i] || `unknown_test_file_${i}`);
+        }
+      } else {
+        // フォールバック：渡されたテストファイルを使用
+        testFiles.forEach((file) => this.stats.filesProcessed.add(file));
+      }
     } else {
-      // 失敗したテスト統計の更新
-      this.stats.testsRun += testFiles.length;
-      this.stats.testsFailed += testFiles.length;
+      // フォールバック：従来の推定ロジック
+      testFiles.forEach((file) => this.stats.filesProcessed.add(file));
+
+      if (result.success) {
+        // 成功したテストファイル数を概算
+        this.stats.testsRun += testFiles.length;
+        this.stats.testsPassed += testFiles.length;
+      } else {
+        // 失敗したテスト統計の更新
+        this.stats.testsRun += testFiles.length;
+        this.stats.testsFailed += testFiles.length;
+      }
     }
   }
 
@@ -1131,10 +1159,8 @@ export class CIRunner {
           lintFiles = stage.files.length;
           break;
         case "test-execution":
-          // テストファイル数は実行結果から推定
-          testFiles = this.stats.testsRun > 0
-            ? Math.max(testFiles, Math.ceil(this.stats.testsRun / 2))
-            : 0;
+          // テストファイル数は実際の統計から取得
+          testFiles = this.stats.filesProcessed.size;
           break;
         case "format-check":
           formatFiles = Math.max(formatFiles, typeCheckFiles); // 通常は同じファイル群

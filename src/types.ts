@@ -139,7 +139,7 @@ export type CIStage =
   | { kind: "format-check"; checkOnly: boolean; hierarchy: string | null };
 
 export type StageResult =
-  | { kind: "success"; stage: CIStage; duration: number }
+  | { kind: "success"; stage: CIStage; duration: number; testSummary?: string }
   | { kind: "failure"; stage: CIStage; error: string; shouldStop: true }
   | { kind: "skipped"; stage: CIStage; reason: string };
 
@@ -170,6 +170,14 @@ export type LogMode =
   | { kind: "debug"; verboseLevel: "high"; breakdownLoggerEnv: BreakdownLoggerEnvConfig }
   | { kind: "error-files-only"; implicitSilent: true };
 
+// === テスト統計情報 ===
+export type TestStats = {
+  filesRun: number;
+  testsRun: number;
+  testsPassed: number;
+  testsFailed: number;
+};
+
 // === プロセス実行結果 ===
 export type ProcessResult = {
   success: boolean;
@@ -177,6 +185,7 @@ export type ProcessResult = {
   stdout: string;
   stderr: string;
   duration: number;
+  testStats?: TestStats; // テスト実行時のみ設定される
 };
 
 // === バッチ失敗情報 ===

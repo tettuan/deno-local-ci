@@ -5,7 +5,84 @@
  * 型安全なプロセス実行とエラーハンドリング
  */
 
-import { createError, ProcessResult, Result, ValidationError } from "./types.ts";
+import { createError, ProcessResult, Result, TestStats, ValidationError } from "./types.ts";
+
+/**
+ * テスト出力からサマリー行を抽出（シンプル版）
+ */
+export function extractTestSummaryLine(output: string): string | undefined {
+  const lines = output.split("\n");
+
+  // "passed" と "failed" が含まれる行、または "ok |" で始まる行を探す
+  for (const line of lines) {
+    if (
+      (line.includes("passed") && line.includes("failed")) ||
+      line.trim().startsWith("ok |") ||
+      line.trim().match(/^(PASSED|FAILED)\s*\|/)
+    ) {
+      // 先頭の空白や特殊文字を除去して返す
+      return line.trim();
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * テスト実行結果の出力解析クラス
+ */
+class TestOutputAnalyzer {
+  private constructor() {}
+
+  /**
+   * deno test 出力からテスト統計を抽出
+   * Smart Constructor パターンでテスト出力の型安全な解析
+   */
+  static analyzeTestOutput(stdout: string, stderr: string): TestStats {
+    const output = stdout + stderr;
+
+    // パターン1: "ok | 76 passed | 0 failed" (最終サマリー) - より厳密なマッチング
+    const summaryPattern = /ok\s*\|\s*(\d+)\s+passed\s*\|\s*(\d+)\s+failed/;
+    const summaryMatch = output.match(summaryPattern);
+    if (summaryMatch) {
+      const passed = parseInt(summaryMatch[1], 10);
+      const failed = parseInt(summaryMatch[2], 10);
+      return {
+        filesRun: this.extractFileCount(output),
+        testsRun: passed + failed,
+        testsPassed: passed,
+        testsFailed: failed,
+      };
+    }
+
+    // パターン2: 個別テスト結果から集計
+    const testMatches = output.match(/running (\d+) tests? from/g);
+    const fileCount = testMatches ? testMatches.length : 0;
+
+    // パスしたテスト数をカウント
+    const passedMatches = output.match(/\.\.\. ok/g);
+    const passed = passedMatches ? passedMatches.length : 0;
+
+    // 失敗したテスト数をカウント
+    const failedMatches = output.match(/\.\.\. FAILED/g);
+    const failed = failedMatches ? failedMatches.length : 0;
+
+    return {
+      filesRun: fileCount,
+      testsRun: passed + failed,
+      testsPassed: passed,
+      testsFailed: failed,
+    };
+  } /**
+   * テストファイル数を抽出
+   */
+
+  private static extractFileCount(output: string): number {
+    // "running N tests from ./path/to/file.test.ts" パターンをカウント
+    const fileMatches = output.match(/running \d+ tests? from [./]/g);
+    return fileMatches ? fileMatches.length : 0;
+  }
+}
 
 /**
  * プロセス実行サービス
@@ -173,6 +250,7 @@ export class DenoCommandRunner {
   /**
    * Denoテスト実行（階層指定サポート）
    * 全域性原則：単一ファイルが指定された場合は、階層に関係なく、その特定ファイルのみ実行
+   * テスト統計解析機能付き
    */
   static async test(
     files: string[] = [],
@@ -219,7 +297,25 @@ export class DenoCommandRunner {
     }
     // files.length === 0 && !options.hierarchy の場合は引数なし（プロジェクト全体）
 
-    return await ProcessRunner.runCommand("deno", args);
+    const result = await ProcessRunner.runCommand("deno", args);
+
+    // テスト実行結果の場合、統計情報を解析して追加
+    if (result.ok) {
+      const testStats = TestOutputAnalyzer.analyzeTestOutput(
+        result.data.stdout,
+        result.data.stderr,
+      );
+
+      return {
+        ok: true,
+        data: {
+          ...result.data,
+          testStats,
+        },
+      };
+    }
+
+    return result;
   }
 
   /**

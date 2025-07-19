@@ -133,7 +133,7 @@ export class CILogger {
 
     switch (result.kind) {
       case "success":
-        this.logSuccess(stageName, result.duration);
+        this.logSuccess(stageName, result.duration, result.testSummary);
         break;
       case "failure":
         this.logFailure(stageName, result.error);
@@ -412,11 +412,16 @@ export class CILogger {
     }
   }
 
-  private logSuccess(stageName: string, duration: number): void {
+  private logSuccess(stageName: string, duration: number, testSummary?: string): void {
     if (this.mode.kind === "silent" || this.mode.kind === "error-files-only") return;
 
     const durationStr = this.formatDuration(duration);
     console.log(`${stageName} completed successfully (${durationStr})`);
+
+    // テストサマリー行があれば表示
+    if (testSummary) {
+      console.log(testSummary);
+    }
   }
 
   private logFailure(stageName: string, error: string): void {
