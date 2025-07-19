@@ -200,6 +200,12 @@ export async function main(args: string[]): Promise<void> {
       Deno.exit(0);
     }
 
+    // Handle version flag
+    if (options.version) {
+      CLIParser.showVersion();
+      Deno.exit(0);
+    }
+
     // Build CI configuration
     const configResult = CLIParser.buildCIConfig(options);
     if (!configResult.ok) {

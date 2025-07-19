@@ -6,7 +6,7 @@
  */
 
 /** Current version of @aidevtool/ci */
-export const VERSION = "0.1.3";
+export const VERSION = "0.1.4";
 
 /**
  * Get version information for display
