@@ -146,6 +146,7 @@ export class DenoCommandRunner {
 
   /**
    * Deno型チェック実行（階層指定サポート）
+   * 全域性原則：特定ファイルが指定された場合は、階層に関係なく、その特定ファイルのみチェック
    */
   static async typeCheck(
     files: string[] = [],
@@ -156,18 +157,22 @@ export class DenoCommandRunner {
     if (options.remote) args.push("--remote");
     if (options.noCheck) args.push("--no-check");
 
-    // 階層が指定されている場合は階層を追加、そうでなければファイルを追加
-    if (options.hierarchy) {
-      args.push(options.hierarchy);
-    } else {
+    // 型安全な実行戦略の決定
+    if (files.length > 0) {
+      // 特定ファイルが指定されている場合は、常にそのファイルのみチェック
       args.push(...files);
+    } else if (options.hierarchy) {
+      // ファイル指定がなく、階層のみ指定されている場合
+      args.push(options.hierarchy);
     }
+    // files.length === 0 && !options.hierarchy の場合は引数なし（プロジェクト全体）
 
     return await ProcessRunner.runCommand("deno", args);
   }
 
   /**
    * Denoテスト実行（階層指定サポート）
+   * 全域性原則：単一ファイルが指定された場合は、階層に関係なく、その特定ファイルのみ実行
    */
   static async test(
     files: string[] = [],
@@ -202,18 +207,24 @@ export class DenoCommandRunner {
       args.push("--coverage");
     }
 
-    // 階層が指定されている場合は階層を追加、そうでなければファイルを追加
-    if (options.hierarchy) {
-      args.push(options.hierarchy);
-    } else {
+    // 型安全な実行戦略の決定
+    // 1. 特定ファイルが指定されている場合：そのファイルを優先実行（single-file/batchモード対応）
+    // 2. 階層のみが指定されている場合：階層全体を実行（allモード対応）
+    if (files.length > 0) {
+      // 特定ファイルが指定されている場合は、常にそのファイルのみ実行
       args.push(...files);
+    } else if (options.hierarchy) {
+      // ファイル指定がなく、階層のみ指定されている場合
+      args.push(options.hierarchy);
     }
+    // files.length === 0 && !options.hierarchy の場合は引数なし（プロジェクト全体）
 
     return await ProcessRunner.runCommand("deno", args);
   }
 
   /**
    * Denoリント実行（階層指定サポート）
+   * 全域性原則：特定ファイルが指定された場合は、階層に関係なく、その特定ファイルのみリント
    */
   static async lint(
     files: string[] = [],
@@ -231,18 +242,22 @@ export class DenoCommandRunner {
       }
     }
 
-    // 階層が指定されている場合は階層を追加、そうでなければファイルを追加
-    if (options.hierarchy) {
-      args.push(options.hierarchy);
-    } else {
+    // 型安全な実行戦略の決定
+    if (files.length > 0) {
+      // 特定ファイルが指定されている場合は、常にそのファイルのみリント
       args.push(...files);
+    } else if (options.hierarchy) {
+      // ファイル指定がなく、階層のみ指定されている場合
+      args.push(options.hierarchy);
     }
+    // files.length === 0 && !options.hierarchy の場合は引数なし（プロジェクト全体）
 
     return await ProcessRunner.runCommand("deno", args);
   }
 
   /**
    * Denoフォーマット実行（階層指定サポート）
+   * 全域性原則：特定ファイルが指定された場合は、階層に関係なく、その特定ファイルのみフォーマット
    */
   static async format(
     files: string[] = [],
@@ -258,12 +273,15 @@ export class DenoCommandRunner {
       args.push("--indent-width", options.indentWidth.toString());
     }
 
-    // 階層が指定されている場合は階層を追加、そうでなければファイルを追加
-    if (options.hierarchy) {
-      args.push(options.hierarchy);
-    } else {
+    // 型安全な実行戦略の決定
+    if (files.length > 0) {
+      // 特定ファイルが指定されている場合は、常にそのファイルのみフォーマット
       args.push(...files);
+    } else if (options.hierarchy) {
+      // ファイル指定がなく、階層のみ指定されている場合
+      args.push(options.hierarchy);
     }
+    // files.length === 0 && !options.hierarchy の場合は引数なし（プロジェクト全体）
 
     return await ProcessRunner.runCommand("deno", args);
   }

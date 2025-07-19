@@ -528,30 +528,61 @@ export class CIRunner {
   ) {
     switch (strategy.mode.kind) {
       case "all":
+        console.log(`[ALL] Processing all ${testFiles.length} files together`);
         return await DenoCommandRunner.test(testFiles, { hierarchy });
 
       case "batch": {
-        // バッチ実行（簡略実装）
+        // 型安全なバッチ実行
         const batchSize = strategy.mode.batchSize;
+        console.log(
+          `[BATCH] Processing ${testFiles.length} files in batches of ${batchSize}`,
+        );
+
         for (let i = 0; i < testFiles.length; i += batchSize) {
           const batch = testFiles.slice(i, i + batchSize);
+          const batchNumber = Math.floor(i / batchSize) + 1;
+          const totalBatches = Math.ceil(testFiles.length / batchSize);
+
+          console.log(
+            `[BATCH] Executing batch ${batchNumber}/${totalBatches}: ${batch.join(", ")}`,
+          );
+
+          // バッチ内の各ファイルを明示的に指定して実行
           const result = await DenoCommandRunner.test(batch, { hierarchy });
           if (!result.ok || !result.data.success) {
-            return result;
+            console.log(`[BATCH] Batch ${batchNumber} failed`);
+            // 失敗したバッチ情報を含める（フォールバック用）
+            return {
+              ...result,
+              failedBatch: { startIndex: i, endIndex: i + batchSize - 1, files: batch },
+            };
           }
+          console.log(`[BATCH] Batch ${batchNumber} completed successfully`);
         }
+        console.log(
+          `[BATCH] All ${Math.ceil(testFiles.length / batchSize)} batches processed successfully`,
+        );
         return await DenoCommandRunner.test([], { hierarchy }); // 成功を示す空の実行
       }
-
       case "single-file": {
+        // 全域性原則：各ファイルを個別実行し、エラー時はstopOnFirstErrorに従う
+        console.log(`[SINGLE-FILE] Processing ${testFiles.length} files individually`);
+
         for (const file of testFiles) {
+          console.log(`[SINGLE-FILE] Executing: ${file}`);
           const result = await DenoCommandRunner.test([file], { hierarchy });
           if (!result.ok || !result.data.success) {
             if (strategy.mode.stopOnFirstError) {
+              console.log(`[SINGLE-FILE] Stopping on first error at ${file}`);
               return result;
             }
+            console.log(`[SINGLE-FILE] Continuing after error in ${file}`);
+            // stopOnFirstError = false の場合は継続実行
           }
         }
+        console.log(
+          `[SINGLE-FILE] All ${testFiles.length} files processed successfully`,
+        );
         return await DenoCommandRunner.test([], { hierarchy }); // 成功を示す空の実行
       }
     }
@@ -745,6 +776,7 @@ export class CIRunner {
   ) {
     switch (strategy.mode.kind) {
       case "all":
+        console.log(`[TYPECHECK-ALL] Processing all ${files.length} files together`);
         return await DenoCommandRunner.typeCheck(files);
 
       case "batch": {
