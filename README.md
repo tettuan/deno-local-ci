@@ -333,15 +333,15 @@ deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci te
 - **Fallback Inheritance**: Execution mode fallback functionality continues to work with hierarchy
   specification
 
-## 📊 実行モード詳細
+## 📊 Execution Mode Details
 
-### All Mode (`--mode all`) - デフォルト
+### All Mode (`--mode all`) - Default
 
-- すべてのテストを一度に実行
-- 最高速だがエラー分離が限定的
-- シンプルなプロジェクトや最終検証に最適
-- 失敗時はbatchモードにフォールバック
-- **推奨用途**: 高速チェック、小規模プロジェクト、CI/CD環境
+- Execute all tests at once
+- Fastest execution but limited error isolation
+- Optimal for simple projects or final validation
+- Falls back to batch mode on failure
+- **Recommended use**: Fast checks, small projects, CI/CD environments
 
 ```bash
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode all
@@ -349,40 +349,40 @@ deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --
 
 ### Batch Mode (`--mode batch`)
 
-- 設定可能なバッチサイズでファイルをグループ化して処理
-- パフォーマンスとエラー分離のバランス
-- バッチ失敗時は自動的にsingle-fileモードにフォールバック
-- 大部分のプロジェクトに最適
-- **推奨用途**: 中〜大規模プロジェクト、バランス重視
+- Process files in groups with configurable batch size
+- Balance between performance and error isolation
+- Automatically falls back to single-file mode on batch failure
+- Optimal for most projects
+- **Recommended use**: Medium to large projects, balanced approach
 
 ```bash
-# デフォルトバッチサイズ（25ファイル）
+# Default batch size (25 files)
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode batch
 
-# カスタムバッチサイズ
+# Custom batch size
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode batch --batch-size 10
 ```
 
 ### Single-File Mode (`--mode single-file`)
 
-- テストファイルを1つずつ実行
-- 最大限の分離と詳細なエラー報告
-- 特定のテスト失敗のデバッグに最適
-- 実行速度は遅いが最も信頼性が高い
-- **推奨用途**: 開発環境、デバッグ、詳細なエラー調査
+- Execute test files one by one
+- Maximum isolation and detailed error reporting
+- Optimal for debugging specific test failures
+- Slower execution but most reliable
+- **Recommended use**: Development environment, debugging, detailed error investigation
 
 ```bash
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode single-file
 ```
 
-## 🔍 ログモード詳細
+## 🔍 Log Mode Details
 
-### Normal Mode (`--log-mode normal`) - デフォルト
+### Normal Mode (`--log-mode normal`) - Default
 
-- 標準出力とプログレス表示
-- ステージ完了通知
-- エラーサマリーとファイルリスト
-- **推奨用途**: 対話的な開発環境
+- Standard output and progress display
+- Stage completion notifications
+- Error summary and file lists
+- **Recommended use**: Interactive development environment
 
 ```bash
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --log-mode normal
@@ -390,9 +390,9 @@ deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --
 
 ### Silent Mode (`--log-mode silent`)
 
-- 最小限の出力
-- 重要なエラーと最終結果のみ
-- **推奨用途**: CI/CD環境、自動化スクリプト
+- Minimal output
+- Only critical errors and final results
+- **Recommended use**: CI/CD environments, automation scripts
 
 ```bash
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --log-mode silent
@@ -400,10 +400,10 @@ deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --
 
 ### Error Files Only Mode (`--log-mode error-files-only`)
 
-- エラーを含むファイルのみ表示
-- コンパクトなエラー報告
-- 迅速な問題特定に最適
-- **推奨用途**: エラーの迅速な特定、レビュー
+- Display only files containing errors
+- Compact error reporting
+- Optimal for rapid issue identification
+- **Recommended use**: Quick error identification, code review
 
 ```bash
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --log-mode error-files-only
@@ -411,103 +411,103 @@ deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --
 
 ### Debug Mode (`--log-mode debug`)
 
-- 詳細な実行情報とタイムスタンプ
-- BreakdownLogger統合（`--log-key`と`--log-length`が必須）
-- 完全な設定とステート情報のログ
-- **推奨用途**: トラブルシューティング、詳細分析
+- Detailed execution information with timestamps
+- BreakdownLogger integration (requires `--log-key` and `--log-length`)
+- Complete configuration and state information logging
+- **Recommended use**: Troubleshooting, detailed analysis
 
 ```bash
-# BreakdownLoggerとの統合を含む詳細デバッグ
+# Detailed debugging with BreakdownLogger integration
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci \
   --log-mode debug --log-key CI_DEBUG --log-length M
 
-# 短いメッセージでのデバッグ
+# Debug with short messages
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci \
   --log-mode debug --log-key DEV --log-length W
 
-# 長いメッセージでの詳細デバッグ
+# Detailed debug with long messages
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci \
   --log-mode debug --log-key ANALYSIS --log-length L
 ```
 
-## 🌍 環境変数
+## 🌍 Environment Variables
 
-CI実行時に以下の環境変数を使用できます：
+The following environment variables can be used during CI execution:
 
 ```bash
-# デバッグログの有効化（--log-mode debugの代替）
+# Enable debug logging (alternative to --log-mode debug)
 export DEBUG=true
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci
 
-# ログレベルの設定
+# Set log level
 export LOG_LEVEL=debug
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci
 
-# BreakdownLogger環境変数（デバッグモード使用時）
+# BreakdownLogger environment variables (when using debug mode)
 export CI_LOCAL_KEY=MY_DEBUG_KEY
 export CI_LOCAL_LENGTH=M
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --log-mode debug --log-key CI_LOCAL --log-length M
 ```
 
-## ⚡ 実践的な使用パターン
+## ⚡ Practical Usage Patterns
 
-### 開発ワークフロー
+### Development Workflow
 
 ```bash
-# 1. 開発中の迅速チェック
+# 1. Quick check during development
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode single-file --log-mode error-files-only
 
-# 2. コミット前の完全チェック
+# 2. Complete check before commit
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode batch
 
-# 3. プルリクエスト前の最終確認
+# 3. Final verification before pull request
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode all --log-mode silent
 ```
 
-### 階層指定を活用した開発ワークフロー
+### Development Workflow with Hierarchy Targeting
 
 ```bash
-# 1. 作業中のモジュールのみ迅速チェック（src/components/配下）
+# 1. Quick check on working module only (src/components/ directory)
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci src/components/ --mode single-file --log-mode error-files-only
 
-# 2. API関連のみバッチチェック（src/api/配下）
+# 2. Batch check API-related files only (src/api/ directory)
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci src/api/ --mode batch --log-mode normal
 
-# 3. 新機能のテストのみ実行（tests/features/new-feature/配下）
+# 3. Execute new feature tests only (tests/features/new-feature/ directory)
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci tests/features/new-feature/ --mode all
 
-# 4. ライブラリ変更後の影響確認（lib/配下）
+# 4. Check library changes impact (lib/ directory)
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci lib/ --mode batch --stop-on-first-error
 
-# 5. ユーティリティ修正後の検証（src/utils/配下）
+# 5. Verify utility modifications (src/utils/ directory)
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci src/utils/ --mode all --log-mode silent
 ```
 
-### CI/CD環境
+### CI/CD Environment
 
 ```bash
-# GitHub Actions等での使用
+# Usage in GitHub Actions etc.
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode batch --log-mode silent --no-fallback
 
-# Jenkins等での使用（詳細ログ）
+# Usage in Jenkins etc. (detailed logging)
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode batch --log-mode normal
 
-# Docker環境での使用
+# Usage in Docker environment
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode all --log-mode silent
 ```
 
-### デバッグ・トラブルシューティング
+### Debug & Troubleshooting
 
 ```bash
-# 特定の問題の詳細調査
+# Detailed investigation of specific issues
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci \
   --mode single-file --log-mode debug --log-key ISSUE_123 --log-length L
 
-# 特定パターンのテストのみデバッグ
+# Debug only tests matching specific pattern
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci \
   --filter "*api*" --log-mode debug --log-key API_TEST --log-length M
 
-# エラー後即座に停止してデバッグ
+# Stop immediately after error for debugging
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci \
   --stop-on-first-error --log-mode debug --log-key FIRST_ERROR --log-length L
 ```
