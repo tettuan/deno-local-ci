@@ -89,7 +89,7 @@ export class CIRunner {
   private readonly config: CIConfig;
   private readonly projectRoot: string;
 
-    // Statistics tracking
+  // Statistics tracking
   private stats: {
     filesProcessed: Set<string>;
     testsRun: number;
@@ -209,24 +209,30 @@ export class CIRunner {
       for (const stage of stages) {
         // ステージ開始時の進捗更新
         this.updateProgress(this.getStageName(stage), this.progressState.processedFiles);
-        
+
         const stageResult = await this.executeStage(stage);
         completedStages.push(stageResult);
 
         this.updateFileStats(stage); // Update statistics
-        
+
         // ステージ完了時の進捗更新
         const processedFiles = this.getStageFileCount(stage);
-        const errorCount = stageResult.kind === "failure" ? this.extractErrorCount(stageResult.error) : 0;
-        
+        const errorCount = stageResult.kind === "failure"
+          ? this.extractErrorCount(stageResult.error)
+          : 0;
+
         // updateProgressで直接進捗状態を更新
         this.updateProgress(
-          this.getStageName(stage), 
+          this.getStageName(stage),
           this.progressState.processedFiles + processedFiles,
-          stageResult.kind === "failure" ? this.progressState.errorFiles + processedFiles : this.progressState.errorFiles,
+          stageResult.kind === "failure"
+            ? this.progressState.errorFiles + processedFiles
+            : this.progressState.errorFiles,
           undefined,
           undefined,
-          stageResult.kind === "failure" ? this.progressState.totalErrorCount + errorCount : this.progressState.totalErrorCount
+          stageResult.kind === "failure"
+            ? this.progressState.totalErrorCount + errorCount
+            : this.progressState.totalErrorCount,
         );
 
         if (stageResult.kind === "failure") {
@@ -249,7 +255,9 @@ export class CIRunner {
             errorFiles: this.progressState.errorFiles,
             totalErrorCount: this.progressState.totalErrorCount,
             isFallback: this.progressState.isFallback,
-            fallbackMessage: this.progressState.isFallback ? "CI finished with errors - showing progress summary" : undefined
+            fallbackMessage: this.progressState.isFallback
+              ? "CI finished with errors - showing progress summary"
+              : undefined,
           };
 
           this.logger.logProgress(finalProgressState);
@@ -293,7 +301,7 @@ export class CIRunner {
         errorFiles: this.progressState.errorFiles,
         totalErrorCount: this.progressState.totalErrorCount,
         isFallback: true,
-        fallbackMessage: "Unexpected error occurred during CI execution"
+        fallbackMessage: "Unexpected error occurred during CI execution",
       };
 
       this.logger.logProgress(finalProgressState);
@@ -636,7 +644,7 @@ export class CIRunner {
             errorFiles: testFiles.length,
             totalErrorCount: this.progressState.totalErrorCount + fallbackErrorCount,
             isFallback: true,
-            fallbackMessage: "Fallback execution also failed"
+            fallbackMessage: "Fallback execution also failed",
           };
 
           this.logger.logProgress(fallbackProgressState);
@@ -705,11 +713,11 @@ export class CIRunner {
 
                 // フォールバック時の進捗指標更新
                 this.updateProgress(
-                  "Test Execution", 
-                  this.progressState.processedFiles, 
+                  "Test Execution",
+                  this.progressState.processedFiles,
                   this.progressState.errorFiles,
-                  true, 
-                  `Fallback from ${strategy.mode.kind} to ${fallbackStrategy.mode.kind}`
+                  true,
+                  `Fallback from ${strategy.mode.kind} to ${fallbackStrategy.mode.kind}`,
                 );
 
                 // 失敗したバッチのファイルのみでフォールバック実行
@@ -855,11 +863,11 @@ export class CIRunner {
 
     // フォールバック時の進捗指標更新
     this.updateProgress(
-      "Test Execution", 
-      this.progressState.processedFiles, 
+      "Test Execution",
+      this.progressState.processedFiles,
       this.progressState.errorFiles,
-      true, 
-      `Fallback from ${currentStrategy.mode.kind} to ${fallbackStrategy.mode.kind}`
+      true,
+      `Fallback from ${currentStrategy.mode.kind} to ${fallbackStrategy.mode.kind}`,
     );
 
     // 対象ファイルを決定: 失敗したバッチ範囲のみか全ファイルか
@@ -1094,11 +1102,11 @@ export class CIRunner {
 
     // フォールバック時の進捗指標更新
     this.updateProgress(
-      "Type Check", 
-      this.progressState.processedFiles, 
+      "Type Check",
+      this.progressState.processedFiles,
       this.progressState.errorFiles,
-      true, 
-      `Fallback from ${currentStrategy.mode.kind} to ${fallbackStrategy.mode.kind}`
+      true,
+      `Fallback from ${currentStrategy.mode.kind} to ${fallbackStrategy.mode.kind}`,
     );
 
     // 対象ファイルを決定
@@ -1428,13 +1436,13 @@ export class CIRunner {
     if (foundMatch) {
       return parseInt(foundMatch[1], 10);
     }
-    
+
     // TypeScriptエラーの個別行を数える（TS番号で始まる行）
     const tsErrorMatches = errorOutput.match(/TS\d+/g);
     if (tsErrorMatches) {
       return tsErrorMatches.length;
     }
-    
+
     // フォールバック: 1つのエラーと仮定
     return 1;
   }
@@ -1457,7 +1465,14 @@ export class CIRunner {
   /**
    * 進捗状態を更新
    */
-  private updateProgress(stageName: string, processedFiles: number, errorFiles?: number, isFallback?: boolean, fallbackMessage?: string, totalErrorCount?: number): void {
+  private updateProgress(
+    stageName: string,
+    processedFiles: number,
+    errorFiles?: number,
+    isFallback?: boolean,
+    fallbackMessage?: string,
+    totalErrorCount?: number,
+  ): void {
     this.progressState.currentStage = stageName;
     this.progressState.processedFiles = processedFiles;
     if (errorFiles !== undefined) {
@@ -1482,7 +1497,9 @@ export class CIRunner {
       totalFiles: this.progressState.totalFiles,
       currentStage: this.progressState.currentStage,
       errorFiles: this.progressState.errorFiles,
-      totalErrorCount: this.progressState.totalErrorCount > 0 ? this.progressState.totalErrorCount : undefined,
+      totalErrorCount: this.progressState.totalErrorCount > 0
+        ? this.progressState.totalErrorCount
+        : undefined,
       isFallback: this.progressState.isFallback,
       fallbackMessage: this.progressState.fallbackMessage,
     };

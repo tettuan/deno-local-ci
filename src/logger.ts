@@ -203,15 +203,19 @@ export class CILogger {
   logProgress(progress: ProgressIndicator): void {
     if (this.mode.kind === "silent" || this.mode.kind === "error-files-only") return;
 
-    const percentage = progress.totalFiles > 0 ? Math.round((progress.processedFiles / progress.totalFiles) * 100) : 0;
+    const percentage = progress.totalFiles > 0
+      ? Math.round((progress.processedFiles / progress.totalFiles) * 100)
+      : 0;
     const progressBar = this.createProgressBar(percentage);
-    
+
     console.log(`\n[${progress.currentStage}] ${progressBar}`);
     console.log(`📁 Files: ${progress.processedFiles}/${progress.totalFiles}`);
-    
+
     if (progress.errorFiles > 0) {
       if (progress.totalErrorCount && progress.totalErrorCount > progress.errorFiles) {
-        console.log(`❌ Errors: ${progress.totalErrorCount} errors in ${progress.errorFiles} files`);
+        console.log(
+          `❌ Errors: ${progress.totalErrorCount} errors in ${progress.errorFiles} files`,
+        );
       } else {
         console.log(`❌ Error files: ${progress.errorFiles}`);
       }
@@ -220,7 +224,9 @@ export class CILogger {
     if (progress.isFallback && progress.fallbackMessage) {
       console.log(`⚠️  Fallback mode: ${progress.fallbackMessage}`);
       if (progress.totalErrorCount) {
-        console.log(`ℹ️  Note: Showing ${progress.totalErrorCount} errors found so far. Total count may be incomplete during fallback execution`);
+        console.log(
+          `ℹ️  Note: Showing ${progress.totalErrorCount} errors found so far. Total count may be incomplete during fallback execution`,
+        );
       } else {
         console.log(`ℹ️  Note: Total error count may be incomplete during fallback execution`);
       }

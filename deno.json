@@ -65,7 +65,7 @@
     "lint": "deno lint",
     "check": "deno check mod.ts",
     "ci": "deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci",
-    "ci:dirty": "deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --allow-dirty",
+    "ci:dirty": "deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --allow-dirty & deno fmt & deno lint",
     "ci:debug": "deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --log-mode debug --log-length M --log-key CI_LOCAL",
     "ci:silent": "deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --log-mode silent",
     "ci:batch": "deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode batch --batch-size 10",
