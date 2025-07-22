@@ -66,12 +66,11 @@
     "check": "deno check mod.ts",
     "ci": "deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci",
     "ci:dirty": "deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --allow-dirty",
-    "ci-debug": "deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --log-mode debug --log-length M --log-key CI_LOCAL",
-    "ci-silent": "deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --log-mode silent",
-    "ci-batch": "deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode batch --batch-size 10",
-    "ci-all": "deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode all",
-    "update-lock": "deno eval \"try { Deno.removeSync('deno.lock'); } catch { /* ignore */ }\" && deno cache mod.ts && deno cache src/cli_parser.test.ts src/domain_services.test.ts src/logger.test.ts src/types.test.ts tests/3_core/ci_integration.test.ts",
-    "publish": "deno publish"
+    "ci:debug": "deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --log-mode debug --log-length M --log-key CI_LOCAL",
+    "ci:silent": "deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --log-mode silent",
+    "ci:batch": "deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode batch --batch-size 10",
+    "ci:all": "deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode all",
+    "update-lock": "deno eval \"try { Deno.removeSync('deno.lock'); } catch { /* ignore */ }\" && deno cache mod.ts && deno cache src/cli_parser.test.ts src/domain_services.test.ts src/logger.test.ts src/types.test.ts tests/3_core/ci_integration.test.ts"
   },
   "fmt": {
     "include": ["src/", "*.ts", "*.md"],
