@@ -22,6 +22,7 @@ import {
   ExecutionStrategy,
   ProcessResult,
   ProcessResultWithBatch,
+  ProgressIndicator,
   Result,
   StageResult,
   ValidationError,
@@ -60,6 +61,8 @@ export interface CIExecutionResult {
   totalDuration: number;
   /** Error details if the CI failed */
   errorDetails?: CIError;
+  /** Final progress state with file and error counts */
+  progressState?: ProgressIndicator;
 }
 
 /**
@@ -86,7 +89,7 @@ export class CIRunner {
   private readonly config: CIConfig;
   private readonly projectRoot: string;
 
-  // Statistics tracking
+    // Statistics tracking
   private stats: {
     filesProcessed: Set<string>;
     testsRun: number;
@@ -99,6 +102,24 @@ export class CIRunner {
     testsPassed: 0,
     testsFailed: 0,
     testsSkipped: 0,
+  };
+
+  // Progress tracking
+  private progressState: {
+    totalFiles: number;
+    processedFiles: number;
+    errorFiles: number;
+    totalErrorCount: number;
+    currentStage: string;
+    isFallback: boolean;
+    fallbackMessage?: string;
+  } = {
+    totalFiles: 0,
+    processedFiles: 0,
+    errorFiles: 0,
+    totalErrorCount: 0,
+    currentStage: "Initializing",
+    isFallback: false,
   };
 
   private constructor(
@@ -179,14 +200,34 @@ export class CIRunner {
 
       const { testFiles, typeCheckFiles } = filesResult.data;
 
+      // Initialize progress state
+      this.initializeProgress(testFiles, typeCheckFiles);
+
       // Execute CI stages
       const stages = this.createStages(testFiles, typeCheckFiles);
 
       for (const stage of stages) {
+        // ステージ開始時の進捗更新
+        this.updateProgress(this.getStageName(stage), this.progressState.processedFiles);
+        
         const stageResult = await this.executeStage(stage);
         completedStages.push(stageResult);
 
         this.updateFileStats(stage); // Update statistics
+        
+        // ステージ完了時の進捗更新
+        const processedFiles = this.getStageFileCount(stage);
+        const errorCount = stageResult.kind === "failure" ? this.extractErrorCount(stageResult.error) : 0;
+        
+        // updateProgressで直接進捗状態を更新
+        this.updateProgress(
+          this.getStageName(stage), 
+          this.progressState.processedFiles + processedFiles,
+          stageResult.kind === "failure" ? this.progressState.errorFiles + processedFiles : this.progressState.errorFiles,
+          undefined,
+          undefined,
+          stageResult.kind === "failure" ? this.progressState.totalErrorCount + errorCount : this.progressState.totalErrorCount
+        );
 
         if (stageResult.kind === "failure") {
           const error = ErrorClassificationService.classifyError({
@@ -199,11 +240,26 @@ export class CIRunner {
 
           this.logger.logErrorFiles(error);
 
+          // Show final failure summary with progress information
+          const totalDuration = performance.now() - startTime;
+          const finalProgressState: ProgressIndicator = {
+            currentStage: `${this.getStageName(stage)} Failed`,
+            processedFiles: this.progressState.processedFiles,
+            totalFiles: this.progressState.totalFiles,
+            errorFiles: this.progressState.errorFiles,
+            totalErrorCount: this.progressState.totalErrorCount,
+            isFallback: this.progressState.isFallback,
+            fallbackMessage: this.progressState.isFallback ? "CI finished with errors - showing progress summary" : undefined
+          };
+
+          this.logger.logProgress(finalProgressState);
+
           return {
             success: false,
             completedStages,
-            totalDuration: performance.now() - startTime,
+            totalDuration: totalDuration,
             errorDetails: error,
+            progressState: finalProgressState,
           };
         }
       }
@@ -229,6 +285,19 @@ export class CIRunner {
 
       this.logger.logError("Unexpected error during CI execution", error);
 
+      // Show final failure summary with progress information
+      const finalProgressState: ProgressIndicator = {
+        currentStage: "CI Execution Failed",
+        processedFiles: this.progressState.processedFiles,
+        totalFiles: this.progressState.totalFiles,
+        errorFiles: this.progressState.errorFiles,
+        totalErrorCount: this.progressState.totalErrorCount,
+        isFallback: true,
+        fallbackMessage: "Unexpected error occurred during CI execution"
+      };
+
+      this.logger.logProgress(finalProgressState);
+
       return {
         success: false,
         completedStages,
@@ -239,6 +308,7 @@ export class CIRunner {
           path: this.projectRoot,
           cause: error instanceof Error ? error.message : String(error),
         },
+        progressState: finalProgressState,
       };
     }
   }
@@ -556,6 +626,20 @@ export class CIRunner {
 
           // エラーファイル詳細をログに出力
           this.logger.logErrorFiles(classifiedError);
+
+          // Show fallback failure progress
+          const fallbackErrorCount = this.extractErrorCount(fallbackErrorOutput);
+          const fallbackProgressState: ProgressIndicator = {
+            currentStage: `${this.getStageName(stage)} Fallback Failed`,
+            processedFiles: testFiles.length,
+            totalFiles: this.progressState.totalFiles,
+            errorFiles: testFiles.length,
+            totalErrorCount: this.progressState.totalErrorCount + fallbackErrorCount,
+            isFallback: true,
+            fallbackMessage: "Fallback execution also failed"
+          };
+
+          this.logger.logProgress(fallbackProgressState);
         }
         // If fallback failed, continue to failure handling below
       }
@@ -617,6 +701,15 @@ export class CIRunner {
                   strategy.mode.kind,
                   fallbackStrategy.mode.kind,
                   result.ok ? result.data.stderr : result.error.message,
+                );
+
+                // フォールバック時の進捗指標更新
+                this.updateProgress(
+                  "Test Execution", 
+                  this.progressState.processedFiles, 
+                  this.progressState.errorFiles,
+                  true, 
+                  `Fallback from ${strategy.mode.kind} to ${fallbackStrategy.mode.kind}`
                 );
 
                 // 失敗したバッチのファイルのみでフォールバック実行
@@ -758,6 +851,15 @@ export class CIRunner {
       currentStrategy.mode.kind,
       fallbackStrategy.mode.kind,
       originalError,
+    );
+
+    // フォールバック時の進捗指標更新
+    this.updateProgress(
+      "Test Execution", 
+      this.progressState.processedFiles, 
+      this.progressState.errorFiles,
+      true, 
+      `Fallback from ${currentStrategy.mode.kind} to ${fallbackStrategy.mode.kind}`
     );
 
     // 対象ファイルを決定: 失敗したバッチ範囲のみか全ファイルか
@@ -988,6 +1090,15 @@ export class CIRunner {
       currentStrategy.mode.kind,
       fallbackStrategy.mode.kind,
       originalError,
+    );
+
+    // フォールバック時の進捗指標更新
+    this.updateProgress(
+      "Type Check", 
+      this.progressState.processedFiles, 
+      this.progressState.errorFiles,
+      true, 
+      `Fallback from ${currentStrategy.mode.kind} to ${fallbackStrategy.mode.kind}`
     );
 
     // 対象ファイルを決定
@@ -1289,5 +1400,92 @@ export class CIRunner {
       case "format-check":
         return "Format Check";
     }
+  }
+
+  /**
+   * ステージのファイル数を取得
+   */
+  private getStageFileCount(stage: CIStage): number {
+    switch (stage.kind) {
+      case "lockfile-init":
+        return 1; // lockfile 1つ
+      case "type-check":
+      case "test-execution":
+      case "lint-check":
+        return stage.files.length;
+      case "jsr-check":
+      case "format-check":
+        return 0; // 全体的なチェック
+    }
+  }
+
+  /**
+   * エラー出力からエラー総数を抽出
+   */
+  private extractErrorCount(errorOutput: string): number {
+    // "Found X errors." パターンを検索
+    const foundMatch = errorOutput.match(/Found (\d+) errors?\./);
+    if (foundMatch) {
+      return parseInt(foundMatch[1], 10);
+    }
+    
+    // TypeScriptエラーの個別行を数える（TS番号で始まる行）
+    const tsErrorMatches = errorOutput.match(/TS\d+/g);
+    if (tsErrorMatches) {
+      return tsErrorMatches.length;
+    }
+    
+    // フォールバック: 1つのエラーと仮定
+    return 1;
+  }
+
+  /**
+   * 進捗状態を初期化
+   */
+  private initializeProgress(testFiles: string[], typeCheckFiles: string[]): void {
+    // 重複を除いた総ファイル数を計算
+    const allFiles = new Set([...testFiles, ...typeCheckFiles]);
+    this.progressState.totalFiles = allFiles.size;
+    this.progressState.processedFiles = 0;
+    this.progressState.errorFiles = 0;
+    this.progressState.totalErrorCount = 0;
+    this.progressState.currentStage = "Starting";
+    this.progressState.isFallback = false;
+    this.progressState.fallbackMessage = undefined;
+  }
+
+  /**
+   * 進捗状態を更新
+   */
+  private updateProgress(stageName: string, processedFiles: number, errorFiles?: number, isFallback?: boolean, fallbackMessage?: string, totalErrorCount?: number): void {
+    this.progressState.currentStage = stageName;
+    this.progressState.processedFiles = processedFiles;
+    if (errorFiles !== undefined) {
+      this.progressState.errorFiles = errorFiles;
+    }
+    if (totalErrorCount !== undefined) {
+      this.progressState.totalErrorCount = totalErrorCount;
+    }
+    if (isFallback !== undefined) {
+      this.progressState.isFallback = isFallback;
+      this.progressState.fallbackMessage = fallbackMessage;
+    }
+    this.logCurrentProgress();
+  }
+
+  /**
+   * 現在の進捗を表示
+   */
+  private logCurrentProgress(): void {
+    const progress: ProgressIndicator = {
+      processedFiles: this.progressState.processedFiles,
+      totalFiles: this.progressState.totalFiles,
+      currentStage: this.progressState.currentStage,
+      errorFiles: this.progressState.errorFiles,
+      totalErrorCount: this.progressState.totalErrorCount > 0 ? this.progressState.totalErrorCount : undefined,
+      isFallback: this.progressState.isFallback,
+      fallbackMessage: this.progressState.fallbackMessage,
+    };
+    this.logger.logProgress(progress);
   }
 }

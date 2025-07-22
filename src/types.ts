@@ -355,6 +355,24 @@ const getDefaultMessage = (error: ValidationError): string => {
   }
 };
 
+// === 進捗指標情報 ===
+export interface ProgressIndicator {
+  /** 現在処理済みのファイル数 */
+  processedFiles: number;
+  /** 総ファイル数 */
+  totalFiles: number;
+  /** 現在のステージ名 */
+  currentStage: string;
+  /** エラーが発生したファイル数 */
+  errorFiles: number;
+  /** 個別エラーの総数（1ファイルに複数エラーがある場合の合計） */
+  totalErrorCount?: number;
+  /** フォールバック時かどうか */
+  isFallback: boolean;
+  /** フォールバック時のメッセージ */
+  fallbackMessage?: string;
+}
+
 // === CI実行サマリー統計情報 ===
 export interface CISummaryStats {
   /** ステージ統計 */

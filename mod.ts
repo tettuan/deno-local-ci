@@ -267,6 +267,20 @@ export async function main(args: string[]): Promise<void> {
     } else {
       console.error("❌ CI failed");
       console.error(`❌ CI failed: ${result.errorDetails?.kind || "Unknown error"}`);
+      
+      // Show progress information if available
+      if (result.progressState) {
+        const progress = result.progressState;
+        const errorMessage = progress.totalErrorCount 
+          ? `❌ Errors: ${progress.totalErrorCount} errors in ${progress.errorFiles} files`
+          : `❌ Error files: ${progress.errorFiles}/${progress.totalFiles}`;
+        console.error(errorMessage);
+        
+        if (progress.isFallback && progress.fallbackMessage) {
+          console.error(`⚠️  ${progress.fallbackMessage}`);
+        }
+      }
+      
       console.error(`⏱️  Failed after ${result.totalDuration}ms`);
       console.error(`📊 Completed stages: ${result.completedStages.length}`);
       Deno.exit(1);
