@@ -139,9 +139,9 @@ export type CIStage =
   | { kind: "format-check"; checkOnly: boolean; hierarchy: string | null };
 
 export type StageResult =
-  | { kind: "success"; stage: CIStage; duration: number; testSummary?: string }
-  | { kind: "failure"; stage: CIStage; error: string; shouldStop: true }
-  | { kind: "skipped"; stage: CIStage; reason: string };
+  | { kind: "success"; stage: CIStage; duration: number; testSummary?: string; outputLog?: string }
+  | { kind: "failure"; stage: CIStage; error: string; shouldStop: true; outputLog?: string }
+  | { kind: "skipped"; stage: CIStage; reason: string; outputLog?: string };
 
 export type CIError =
   | { kind: "TypeCheckError"; files: string[]; details: string[] }
@@ -389,6 +389,7 @@ export interface CISummaryStats {
     typeCheckFiles: number;
     lintFiles: number;
     formatFiles: number;
+    fileInfoLines: string[];
   };
   /** テスト実行統計 */
   tests: {

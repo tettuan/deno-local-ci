@@ -262,16 +262,21 @@ export class CILogger {
 
     if (stats) {
       console.log("\n" + "Files Processed:");
-      console.log(`📁 Total files checked: ${stats.files.totalChecked}`);
-      if (stats.files.typeCheckFiles > 0) {
-        console.log(`📝 TypeScript files: ${stats.files.typeCheckFiles}`);
+      // 追加: 実際のファイル数や実行数が記載された行全体をそのまま表示
+      if (Array.isArray(stats.files.fileInfoLines)) {
+        stats.files.fileInfoLines.forEach((line) => console.log(line));
       }
-      if (stats.files.testFiles > 0) {
-        console.log(`🧪 Test files: ${stats.files.testFiles}`);
-      }
-      if (stats.files.lintFiles > 0) {
-        console.log(`🔍 Lint checked files: ${stats.files.lintFiles}`);
-      }
+      // 従来のサマリーも残す場合は以下を有効化
+      // console.log(`📁 Total files checked: ${stats.files.totalChecked}`);
+      // if (stats.files.typeCheckFiles > 0) {
+      //   console.log(`📝 TypeScript files: ${stats.files.typeCheckFiles}`);
+      // }
+      // if (stats.files.testFiles > 0) {
+      //   console.log(`🧪 Test files: ${stats.files.testFiles}`);
+      // }
+      // if (stats.files.lintFiles > 0) {
+      //   console.log(`🔍 Lint checked files: ${stats.files.lintFiles}`);
+      // }
 
       if (stats.tests.totalTests > 0) {
         console.log("\n" + "Test Results:");
@@ -281,7 +286,7 @@ export class CILogger {
           console.log(`❌ Failed: ${stats.tests.failedTests}`);
         }
         if (stats.tests.skippedTests > 0) {
-          console.log(`⏭️ Skipped: ${stats.tests.skippedTests}`);
+          console.log(`⏭️  Skipped: ${stats.tests.skippedTests}`);
         }
       }
 
@@ -300,57 +305,6 @@ export class CILogger {
       console.log("\n✅ All CI stages completed successfully!");
     } else {
       console.log(`\n❌ CI failed with ${failedStages} error(s)`);
-    }
-  }
-
-  /**
-   * デバッグ情報ログ
-   */
-  logDebug(message: string, data?: unknown): void {
-    if (this.mode.kind !== "debug") return;
-
-    if (this.breakdownLogger) {
-      // BreakdownLoggerを使用したデバッグログ
-      this.breakdownLogger.debug(message);
-      if (data) {
-        this.breakdownLogger.debug(JSON.stringify(data, null, 2));
-      }
-    } else {
-      // フォールバック: 標準コンソール出力
-      console.log(`[DEBUG] ${message}`);
-      if (data) {
-        console.log(JSON.stringify(data, null, 2));
-      }
-    }
-  }
-
-  /**
-   * 警告ログ
-   */
-  logWarning(message: string): void {
-    if (this.mode.kind === "error-files-only") return;
-
-    if (this.breakdownLogger) {
-      this.breakdownLogger.warn(message);
-    } else {
-      console.log(`WARNING: ${message}`);
-    }
-  }
-
-  /**
-   * エラーログ（silent モードでも出力）
-   */
-  logError(message: string, error?: unknown): void {
-    if (this.breakdownLogger) {
-      this.breakdownLogger.error(message);
-      if (error && this.mode.kind === "debug") {
-        this.breakdownLogger.error(String(error));
-      }
-    } else {
-      console.error(`ERROR: ${message}`);
-      if (error && this.mode.kind === "debug") {
-        console.error(error);
-      }
     }
   }
 
@@ -425,9 +379,8 @@ export class CILogger {
         }
         return stage.files.length > 0 ? `deno lint <${stage.files.length} files>` : "deno lint .";
       }
-      case "format-check": {
+      case "format": {
         const formatArgs = ["deno fmt"];
-        if (stage.checkOnly) formatArgs.push("--check");
         if (stage.hierarchy) {
           formatArgs.push(stage.hierarchy);
         } else {

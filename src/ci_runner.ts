@@ -1336,30 +1336,45 @@ export class CIRunner {
       }
     });
 
-    // ファイル種別の統計
-    let testFiles = 0;
-    let typeCheckFiles = 0;
-    let lintFiles = 0;
-    let formatFiles = 0;
-
-    completedStages.forEach((stageResult) => {
-      const stage = stageResult.stage;
-      switch (stage.kind) {
-        case "type-check":
-          typeCheckFiles = stage.files.length;
-          break;
-        case "lint-check":
-          lintFiles = stage.files.length;
-          break;
-        case "test-execution":
-          // テストファイル数は実際の統計から取得
-          testFiles = this.stats.filesProcessed.size;
-          break;
-        case "format-check":
-          formatFiles = Math.max(formatFiles, typeCheckFiles); // 通常は同じファイル群
-          break;
+    // 各ステージごとにoutputLogからファイル数や実行数が記載された行全体を抽出
+    function extractFileInfoLinesFromStage(stages: StageResult[], kind: string): string[] {
+      const stage = stages.find((s) => s.stage.kind === kind && s.outputLog);
+      if (stage && stage.outputLog) {
+        // 📁 Files: ... や 📝 ... などの行をすべて抽出
+        return stage.outputLog.split("\n").filter((line) =>
+          /📁 Files:|📝 TypeScript files:|🧪 Test files:|🔍 Lint checked files:|Format files:/.test(
+            line,
+          )
+        );
       }
-    });
+      return [];
+    }
+
+    // ファイル数（数値）も従来通り抽出
+    function extractFilesCountFromStage(stages: StageResult[], kind: string): number {
+      const stage = stages.find((s) => s.stage.kind === kind && s.outputLog);
+      if (stage && stage.outputLog) {
+        const match = stage.outputLog.match(/📁 Files: \d+\/(\d+)/);
+        if (match) return parseInt(match[1], 10);
+      }
+      return 0;
+    }
+
+    const typeCheckFiles = extractFilesCountFromStage(completedStages, "type-check");
+    const testFiles = extractFilesCountFromStage(completedStages, "test-execution");
+    const lintFiles = extractFilesCountFromStage(completedStages, "lint-check");
+    const formatFiles = extractFilesCountFromStage(completedStages, "format-check");
+
+    // ファイル数や実行数が記載された行全体をまとめて保持
+    const fileInfoLines: string[] = [
+      ...extractFileInfoLinesFromStage(completedStages, "type-check"),
+      ...extractFileInfoLinesFromStage(completedStages, "test-execution"),
+      ...extractFileInfoLinesFromStage(completedStages, "lint-check"),
+      ...extractFileInfoLinesFromStage(completedStages, "format-check"),
+    ];
+
+    // 総ファイル数は最大値を採用（全体の進捗指標として）
+    const totalFilesFromLogs = Math.max(typeCheckFiles, testFiles, lintFiles, formatFiles);
 
     return {
       stages: {
@@ -1369,11 +1384,12 @@ export class CIRunner {
         skipped: skippedStages.length,
       },
       files: {
-        totalChecked: this.stats.filesProcessed.size,
+        totalChecked: totalFilesFromLogs > 0 ? totalFilesFromLogs : this.stats.filesProcessed.size,
         testFiles,
         typeCheckFiles,
         lintFiles,
         formatFiles,
+        fileInfoLines, // 追加: 実際の行全体を保持
       },
       tests: {
         totalTests: this.stats.testsRun,
