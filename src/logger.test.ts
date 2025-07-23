@@ -168,6 +168,7 @@ Deno.test("CILogger - log summary", () => {
         typeCheckFiles: 15,
         lintFiles: 15,
         formatFiles: 15,
+        fileInfoLines: ["src/file1.ts", "src/file2.ts", "src/file3.ts"],
       },
       tests: { totalTests: 50, passedTests: 35, failedTests: 15, skippedTests: 0 },
       timing: {

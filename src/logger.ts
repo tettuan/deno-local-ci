@@ -321,6 +321,32 @@ export class CILogger {
     }
   }
 
+  logDebug(message: string, context?: unknown): void {
+    if (this.mode.kind !== "debug") return;
+
+    if (this.breakdownLogger) {
+      this.breakdownLogger.debug(context ? `${message} ${JSON.stringify(context)}` : message);
+    } else {
+      console.log(`[DEBUG] ${message}${context ? ` ${JSON.stringify(context)}` : ""}`);
+    }
+  }
+
+  logError(message: string, error?: unknown): void {
+    if (this.breakdownLogger) {
+      this.breakdownLogger.error(error ? `${message}: ${error}` : message);
+    } else {
+      console.error(`[ERROR] ${message}${error ? `: ${error}` : ""}`);
+    }
+  }
+
+  logWarning(message: string): void {
+    if (this.breakdownLogger) {
+      this.breakdownLogger.warn(message);
+    } else {
+      console.warn(`[WARNING] ${message}`);
+    }
+  }
+
   // === プライベートメソッド ===
 
   private getStageName(stage: CIStage): string {
@@ -379,7 +405,7 @@ export class CILogger {
         }
         return stage.files.length > 0 ? `deno lint <${stage.files.length} files>` : "deno lint .";
       }
-      case "format": {
+      case "format-check": {
         const formatArgs = ["deno fmt"];
         if (stage.hierarchy) {
           formatArgs.push(stage.hierarchy);
