@@ -204,12 +204,14 @@ export class CILogger {
     if (this.mode.kind === "silent" || this.mode.kind === "error-files-only") return;
 
     const percentage = progress.totalFiles > 0
-      ? Math.round((progress.processedFiles / progress.totalFiles) * 100)
+      ? Math.min(100, Math.round((progress.processedFiles / progress.totalFiles) * 100))
       : 0;
     const progressBar = this.createProgressBar(percentage);
 
     console.log(`\n[${progress.currentStage}] ${progressBar}`);
-    console.log(`📁 Files: ${progress.processedFiles}/${progress.totalFiles}`);
+    console.log(
+      `📁 Files: ${Math.min(progress.processedFiles, progress.totalFiles)}/${progress.totalFiles}`,
+    );
 
     if (progress.errorFiles > 0) {
       if (progress.totalErrorCount && progress.totalErrorCount > progress.errorFiles) {

@@ -213,10 +213,13 @@ export class CIRunner {
         const stageResult = await this.executeStage(stage);
         completedStages.push(stageResult);
 
-        this.updateFileStats(stage); // Update statistics
+        // Update file statistics after stage execution
+        const filesBeforeUpdate = this.stats.filesProcessed.size;
+        this.updateFileStats(stage);
+        const filesAfterUpdate = this.stats.filesProcessed.size;
+        const uniqueFilesProcessed = filesAfterUpdate - filesBeforeUpdate;
 
         // ステージ完了時の進捗更新
-        const processedFiles = this.getStageFileCount(stage);
         const errorCount = stageResult.kind === "failure"
           ? this.extractErrorCount(stageResult.error)
           : 0;
@@ -224,9 +227,9 @@ export class CIRunner {
         // updateProgressで直接進捗状態を更新
         this.updateProgress(
           this.getStageName(stage),
-          this.progressState.processedFiles + processedFiles,
+          this.progressState.processedFiles + uniqueFilesProcessed,
           stageResult.kind === "failure"
-            ? this.progressState.errorFiles + processedFiles
+            ? this.progressState.errorFiles + uniqueFilesProcessed
             : this.progressState.errorFiles,
           undefined,
           undefined,
@@ -399,9 +402,6 @@ export class CIRunner {
 
     this.logger.logStageStart(stage);
 
-    // Update file statistics
-    this.updateFileStats(stage);
-
     try {
       switch (stage.kind) {
         case "type-check":
@@ -566,13 +566,7 @@ export class CIRunner {
 
     // Update test statistics
     if (result.ok) {
-      console.log("=== UPDATING TEST STATS ===");
-      console.log("Result data testStats:", result.data.testStats);
       this.updateTestStats(result.data, testFiles);
-      console.log("Stats after update - testsRun:", this.stats.testsRun);
-      console.log("Stats after update - testsPassed:", this.stats.testsPassed);
-      console.log("Stats after update - testsFailed:", this.stats.testsFailed);
-      console.log("===========================");
     }
 
     if (result.ok && result.data.success) {
@@ -1284,9 +1278,9 @@ export class CIRunner {
   private updateTestStats(result: ProcessResult, testFiles: string[]): void {
     // 実際のテスト統計が利用可能な場合はそれを使用
     if (result.testStats) {
-      this.stats.testsRun = result.testStats.testsRun;
-      this.stats.testsPassed = result.testStats.testsPassed;
-      this.stats.testsFailed = result.testStats.testsFailed;
+      this.stats.testsRun += result.testStats.testsRun;
+      this.stats.testsPassed += result.testStats.testsPassed;
+      this.stats.testsFailed += result.testStats.testsFailed;
 
       // ファイル数も実際の実行結果から取得
       if (result.testStats.filesRun > 0) {
@@ -1423,23 +1417,6 @@ export class CIRunner {
         return "Lint Check";
       case "format-check":
         return "Format Check";
-    }
-  }
-
-  /**
-   * ステージのファイル数を取得
-   */
-  private getStageFileCount(stage: CIStage): number {
-    switch (stage.kind) {
-      case "lockfile-init":
-        return 1; // lockfile 1つ
-      case "type-check":
-      case "test-execution":
-      case "lint-check":
-        return stage.files.length;
-      case "jsr-check":
-      case "format-check":
-        return 0; // 全体的なチェック
     }
   }
 

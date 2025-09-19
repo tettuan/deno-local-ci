@@ -138,3 +138,16 @@ ci-temp/
 # パフォーマンステスト結果
 perf-results/
 benchmarks/results/
+
+# local environment files
+.env
+.env/
+.env*
+.deno/
+.agent/
+.claude/
+scripts/
+
+# temp
+docs/development/
+
