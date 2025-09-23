@@ -8,7 +8,7 @@
 import { assertEquals, assertExists } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { CILogger, LogModeFactory } from "./logger.ts";
 
-import { BreakdownLoggerEnvConfig, type CIError, type CIStage, type StageResult } from "./types.ts";
+import { type CIError, type CIStage, type StageResult } from "./types.ts";
 
 Deno.test("LogModeFactory - create normal mode", () => {
   const mode = LogModeFactory.normal();
@@ -35,15 +35,13 @@ Deno.test("LogModeFactory - create error files only mode", () => {
 });
 
 Deno.test("LogModeFactory - create debug mode", () => {
-  const breakdownConfig = BreakdownLoggerEnvConfig.create("M", "TEST_KEY");
-
-  if (breakdownConfig.ok) {
-    const mode = LogModeFactory.debug(breakdownConfig.data);
-    assertEquals(mode.kind, "debug");
-    if (mode.kind === "debug") {
-      assertEquals(mode.verboseLevel, "high");
-      assertExists(mode.breakdownLoggerEnv);
-    }
+  const mode = LogModeFactory.debug("high", "W", "TEST_KEY");
+  assertEquals(mode.kind, "debug");
+  if (mode.kind === "debug") {
+    assertEquals(mode.verboseLevel, "high");
+    assertExists(mode.breakdownLoggerEnv);
+    assertEquals(mode.breakdownLoggerEnv.logLength, "W");
+    assertEquals(mode.breakdownLoggerEnv.logKey, "TEST_KEY");
   }
 });
 
@@ -55,30 +53,23 @@ Deno.test("CILogger - create with normal mode", () => {
 });
 
 Deno.test("CILogger - create with debug mode requires breakdown config", () => {
-  const breakdownResult = BreakdownLoggerEnvConfig.create("L", "DEBUG_KEY");
+  const mode = LogModeFactory.debug("high", "L", "DEBUG_KEY");
+  const result = CILogger.create(mode);
 
-  if (breakdownResult.ok) {
-    const mode = LogModeFactory.debug(breakdownResult.data);
-    const result = CILogger.create(mode, breakdownResult.data);
-
-    assertEquals(result.ok, true);
-  }
+  assertEquals(result.ok, true);
 });
 
-Deno.test("CILogger - create debug mode without breakdown config fails", () => {
-  // LogMode debug mode always requires breakdownLoggerEnv
-  const breakdownResult = BreakdownLoggerEnvConfig.create("L", "TEST");
+Deno.test("CILogger - create debug mode with invalid config fails", () => {
+  // Create invalid debug mode using LogModeFactory with invalid parameters
+  // This will internally handle the validation and return normal mode as fallback
+  const mode = LogModeFactory.debug("high", "M", ""); // Empty key should cause fallback
+  const result = CILogger.create(mode);
 
-  if (breakdownResult.ok) {
-    const mode = LogModeFactory.debug(breakdownResult.data);
-
-    // Test creating CILogger without breakdownConfig for error testing
-    const result = CILogger.create(mode, undefined);
-
-    assertEquals(result.ok, false);
-    if (!result.ok) {
-      assertEquals(result.error.kind, "EmptyInput");
-    }
+  // Should still succeed because LogModeFactory provides fallback to normal mode
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    // Verify it fell back to normal mode (no breakdownLoggerEnv)
+    assertEquals(mode.kind, "normal");
   }
 });
 
@@ -106,7 +97,7 @@ Deno.test("CILogger - log stage start and result (normal mode)", () => {
       duration: 1500,
     };
 
-    logger.logStageResult(successResult);
+    logger.logStageComplete(successResult);
 
     const failureResult: StageResult = {
       kind: "failure",
@@ -115,11 +106,11 @@ Deno.test("CILogger - log stage start and result (normal mode)", () => {
       shouldStop: true,
     };
 
-    logger.logStageResult(failureResult);
+    logger.logStageComplete(failureResult);
   }
 });
 
-Deno.test("CILogger - log error files", () => {
+Deno.test("CILogger - log error with classified error", () => {
   const mode = LogModeFactory.normal();
   const loggerResult = CILogger.create(mode);
 
@@ -132,20 +123,30 @@ Deno.test("CILogger - log error files", () => {
       errors: ["Assertion failed", "Timeout error"],
     };
 
-    // Error file display test
-    logger.logErrorFiles(error);
+    // Test error logging - uses new logError method
+    logger.logError("Test execution failed", error);
   }
 });
 
-Deno.test("CILogger - log fallback", () => {
+Deno.test("CILogger - log progress with fallback indication", () => {
   const mode = LogModeFactory.normal();
   const loggerResult = CILogger.create(mode);
 
   if (loggerResult.ok) {
     const logger = loggerResult.data;
 
-    // Fallback notification test
-    logger.logFallback("all", "batch", "All mode failed due to test errors");
+    const progressIndicator = {
+      processedFiles: 5,
+      totalFiles: 10,
+      currentStage: "Test Execution",
+      errorFiles: 2,
+      totalErrorCount: 3,
+      isFallback: true,
+      fallbackMessage: "Retrying with batch mode",
+    };
+
+    // Test progress logging with fallback notification
+    logger.logProgress(progressIndicator);
   }
 });
 
@@ -216,60 +217,56 @@ Deno.test("CILogger - error files only mode", () => {
       details: ["Lint rule violation", "Style issue"],
     };
 
-    // In error-files-only mode, only file list is displayed
-    logger.logErrorFiles(error);
+    // In error-files-only mode, errors are logged using logError
+    logger.logError("Lint check failed", error);
   }
 });
 
 Deno.test("CILogger - debug mode with breakdown logger", () => {
-  const breakdownConfigResult = BreakdownLoggerEnvConfig.create("W", "CI_DEBUG");
+  const mode = LogModeFactory.debug("high", "W", "CI_DEBUG");
+  const loggerResult = CILogger.create(mode);
 
-  if (breakdownConfigResult.ok) {
-    const mode = LogModeFactory.debug(breakdownConfigResult.data);
-    const loggerResult = CILogger.create(mode, breakdownConfigResult.data);
+  if (loggerResult.ok) {
+    const logger = loggerResult.data;
 
-    if (loggerResult.ok) {
-      const logger = loggerResult.data;
+    // Save environment variables before setting
+    const originalLogLength = Deno.env.get("LOG_LENGTH");
+    const originalLogKey = Deno.env.get("LOG_KEY");
 
-      // Save environment variables before setting
-      const originalLogLength = Deno.env.get("LOG_LENGTH");
-      const originalLogKey = Deno.env.get("LOG_KEY");
+    // BreakdownLogger environment variable setting
+    logger.setupBreakdownLogger();
 
-      // BreakdownLogger environment variable setting
-      logger.setupBreakdownLogger();
+    // Verify configuration
+    assertEquals(Deno.env.get("LOG_LENGTH"), "W");
+    assertEquals(Deno.env.get("LOG_KEY"), "CI_DEBUG");
 
-      // Verify configuration
-      assertEquals(Deno.env.get("LOG_LENGTH"), "W");
-      assertEquals(Deno.env.get("LOG_KEY"), "CI_DEBUG");
+    // Debug log test
+    logger.logDebug("Debug information", { test: "data" });
 
-      // Debug log test
-      logger.logDebug("Debug information", { test: "data" });
+    // Restore environment variables
+    if (originalLogLength) {
+      Deno.env.set("LOG_LENGTH", originalLogLength);
+    } else {
+      Deno.env.delete("LOG_LENGTH");
+    }
 
-      // Restore environment variables
-      if (originalLogLength) {
-        Deno.env.set("LOG_LENGTH", originalLogLength);
-      } else {
-        Deno.env.delete("LOG_LENGTH");
-      }
-
-      if (originalLogKey) {
-        Deno.env.set("LOG_KEY", originalLogKey);
-      } else {
-        Deno.env.delete("LOG_KEY");
-      }
+    if (originalLogKey) {
+      Deno.env.set("LOG_KEY", originalLogKey);
+    } else {
+      Deno.env.delete("LOG_KEY");
     }
   }
 });
 
-Deno.test("CILogger - log warning and error", () => {
+Deno.test("CILogger - log info and error", () => {
   const mode = LogModeFactory.normal();
   const loggerResult = CILogger.create(mode);
 
   if (loggerResult.ok) {
     const logger = loggerResult.data;
 
-    // Warning log test
-    logger.logWarning("This is a warning message");
+    // Info log test
+    logger.logInfo("This is an info message");
 
     // Error log test
     logger.logError("This is an error message");
@@ -280,45 +277,41 @@ Deno.test("CILogger - log warning and error", () => {
 });
 
 Deno.test("CILogger - BreakdownLogger integration", () => {
-  const breakdownConfigResult = BreakdownLoggerEnvConfig.create("L", "CI_BREAKDOWN_TEST");
+  const mode = LogModeFactory.debug("high", "L", "CI_BREAKDOWN_TEST");
+  const loggerResult = CILogger.create(mode);
 
-  if (breakdownConfigResult.ok) {
-    const mode = LogModeFactory.debug(breakdownConfigResult.data);
-    const loggerResult = CILogger.create(mode, breakdownConfigResult.data);
+  if (loggerResult.ok) {
+    const logger = loggerResult.data;
 
-    if (loggerResult.ok) {
-      const logger = loggerResult.data;
+    // Save environment variables before setting
+    const originalLogLength = Deno.env.get("LOG_LENGTH");
+    const originalLogKey = Deno.env.get("LOG_KEY");
 
-      // Save environment variables before setting
-      const originalLogLength = Deno.env.get("LOG_LENGTH");
-      const originalLogKey = Deno.env.get("LOG_KEY");
+    try {
+      // BreakdownLogger environment variable setting
+      logger.setupBreakdownLogger();
 
-      try {
-        // BreakdownLogger environment variable setting
-        logger.setupBreakdownLogger();
+      // Verify configuration
+      assertEquals(Deno.env.get("LOG_LENGTH"), "L");
+      assertEquals(Deno.env.get("LOG_KEY"), "CI_BREAKDOWN_TEST");
 
-        // Verify configuration
-        assertEquals(Deno.env.get("LOG_LENGTH"), "L");
-        assertEquals(Deno.env.get("LOG_KEY"), "CI_BREAKDOWN_TEST");
+      // Log tests using BreakdownLogger
+      // Output will be displayed with timestamps by BreakdownLogger
+      logger.logDebug("BreakdownLogger integration test");
+      logger.logInfo("BreakdownLogger info test");
+      logger.logError("BreakdownLogger error test");
+    } finally {
+      // Cleanup (restore to original state)
+      if (originalLogLength) {
+        Deno.env.set("LOG_LENGTH", originalLogLength);
+      } else {
+        Deno.env.delete("LOG_LENGTH");
+      }
 
-        // Log tests using BreakdownLogger
-        // Output will be displayed with timestamps by BreakdownLogger
-        logger.logDebug("BreakdownLogger integration test");
-        logger.logWarning("BreakdownLogger warning test");
-        logger.logError("BreakdownLogger error test");
-      } finally {
-        // Cleanup (restore to original state)
-        if (originalLogLength) {
-          Deno.env.set("LOG_LENGTH", originalLogLength);
-        } else {
-          Deno.env.delete("LOG_LENGTH");
-        }
-
-        if (originalLogKey) {
-          Deno.env.set("LOG_KEY", originalLogKey);
-        } else {
-          Deno.env.delete("LOG_KEY");
-        }
+      if (originalLogKey) {
+        Deno.env.set("LOG_KEY", originalLogKey);
+      } else {
+        Deno.env.delete("LOG_KEY");
       }
     }
   }

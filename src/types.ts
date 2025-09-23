@@ -163,6 +163,27 @@ export type TestFileType =
   | { kind: "typecheck"; pattern: "*.ts" | "*.tsx" | "*.d.ts" }
   | { kind: "config"; pattern: "deno.json" | "deno.lock" | "import_map.json" };
 
+// === File Discovery Types ===
+
+/**
+ * Information about discovered project files categorized by purpose.
+ *
+ * Used by the infrastructure layer to communicate file discovery results
+ * to the domain and application layers.
+ */
+export interface TestFileInfo {
+  /** Test files matching patterns *_test.ts, *.test.ts */
+  testFiles: string[];
+  /** TypeScript files for type checking (*.ts, *.tsx, *.d.ts) */
+  typeCheckFiles: string[];
+  /** All relevant files for linting and formatting */
+  allFiles: string[];
+  /** Root directory where files were discovered */
+  projectRoot: string;
+  /** Hierarchy restriction applied during discovery (null = project-wide) */
+  hierarchy: string | null;
+}
+
 // === ログ・診断機能 ===
 export type LogMode =
   | { kind: "normal"; showSections: true }
@@ -371,6 +392,46 @@ export interface ProgressIndicator {
   isFallback: boolean;
   /** フォールバック時のメッセージ */
   fallbackMessage?: string;
+}
+
+/**
+ * Enhanced progress indicator with stage-based progress management.
+ * Provides accurate progress tracking based on actual processing units per stage.
+ */
+export interface EnhancedProgressIndicator {
+  // Stage-level progress
+  /** Current stage name */
+  currentStage: string;
+  /** Current stage number (1-based) */
+  stageNumber: number;
+  /** Total number of stages */
+  totalStages: number;
+  /** Progress within current stage (0-100) */
+  stageProgress: number;
+
+  // File-level details for current stage
+  /** Files processed in current stage */
+  currentStageFiles: number;
+  /** Total files to process in current stage */
+  totalStageFiles: number;
+
+  // Error information
+  /** Number of files with errors */
+  errorFiles: number;
+  /** Total count of individual errors */
+  totalErrorCount: number;
+
+  // Fallback information
+  /** Whether in fallback mode */
+  isFallback: boolean;
+  /** Fallback description message */
+  fallbackMessage?: string;
+
+  // Additional metadata
+  /** Duration of current stage in milliseconds */
+  stageDuration?: number;
+  /** Estimated time remaining in milliseconds */
+  estimatedTimeRemaining?: number;
 }
 
 // === CI実行サマリー統計情報 ===

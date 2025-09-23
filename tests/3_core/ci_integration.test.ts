@@ -109,7 +109,7 @@ Deno.test("Full CI Pipeline - configuration validation", async () => {
       const config = configResult.data;
       const logMode = config.logMode || LogModeFactory.normal();
 
-      const loggerResult = CILogger.create(logMode, config.breakdownLoggerConfig);
+      const loggerResult = CILogger.create(logMode);
       assertEquals(loggerResult.ok, true);
 
       if (loggerResult.ok) {
