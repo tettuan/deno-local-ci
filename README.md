@@ -430,6 +430,243 @@ deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci \
   --log-mode debug --log-key ANALYSIS --log-length L
 ```
 
+#### 🔬 BreakdownLogger Integration Strategy
+
+BreakdownLoggerは実行フローを詳細にタイムスタンプ付きで追跡するライブラリです。テストに豊富なデバッグ情報を埋め込み、実行時にLOG_KEYとLOG_LENGTHで必要な情報だけを選択的に出力することで、膨大なデータの中から問題点を的確に把握できます。
+
+##### 🎯 Core Concept: Selective Debug Output
+
+- **Rich Debug Information**: テストに詳細なログを埋め込み
+- **Strategic Filtering**: LOG_KEYで出力対象を絞り込み
+- **Granular Control**: LOG_LENGTHで詳細レベルを調整
+- **Pinpoint Analysis**: テストフィルタ + KEYフィルタ + LENGTHで特定箇所に集中
+
+##### 🧪 Rich Debug Information in Tests
+
+**Embed Comprehensive Debug Output**
+```typescript
+// tests/user_authentication_test.ts
+import { BreakdownLogger } from "@tettuan/breakdownlogger";
+
+Deno.test("User authentication workflow", async () => {
+  const logger = new BreakdownLogger(); // CIツールの環境変数を自動使用
+
+  // 豊富なデバッグ情報を埋め込む（すべてのポイントでログ出力）
+  logger.log("AUTH_TEST_START", "Starting user authentication test");
+  logger.log("AUTH_SETUP", "Setting up test environment");
+
+  // データベース操作の詳細
+  logger.log("DB_CONNECTION_START", "Connecting to database");
+  const db = await connectToDatabase();
+  logger.log("DB_CONNECTION_SUCCESS", `Connected to database: ${db.name}`);
+
+  logger.log("USER_CREATION_START", "Creating test user");
+  const testUser = await createTestUser({ email: "test@example.com" });
+  logger.log("USER_CREATION_SUCCESS", `Created user ID: ${testUser.id}`);
+
+  // ログイン処理の詳細
+  logger.log("LOGIN_ATTEMPT_START", "Attempting user login");
+  logger.log("PASSWORD_VALIDATION", "Validating password");
+  logger.log("SESSION_CREATION", "Creating user session");
+  const loginResult = await login(testUser.email, "password123");
+  logger.log("LOGIN_SUCCESS", `Login successful, session: ${loginResult.sessionId}`);
+
+  // JWT生成の詳細
+  logger.log("JWT_GENERATION_START", "Generating JWT token");
+  logger.log("JWT_PAYLOAD_CREATION", "Creating JWT payload");
+  logger.log("JWT_SIGNING", "Signing JWT with secret");
+  const token = await generateJWT(loginResult.session);
+  logger.log("JWT_GENERATION_SUCCESS", `JWT generated: ${token.substring(0, 20)}...`);
+
+  // API呼び出しの詳細
+  logger.log("API_REQUEST_START", "Making authenticated API request");
+  logger.log("API_HEADERS_SET", "Setting authorization headers");
+  const response = await fetch("/api/profile", {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  logger.log("API_RESPONSE_RECEIVED", `Response status: ${response.status}`);
+
+  // クリーンアップの詳細
+  logger.log("CLEANUP_START", "Starting test cleanup");
+  await deleteTestUser(testUser.id);
+  logger.log("CLEANUP_SUCCESS", "Test cleanup completed");
+  logger.log("AUTH_TEST_END", "User authentication test completed");
+
+  assertEquals(response.status, 200);
+});
+```
+
+**Database Operation Test with Rich Logging**
+```typescript
+// tests/database_operations_test.ts
+Deno.test("Database CRUD operations", async () => {
+  const logger = new BreakdownLogger();
+
+  // すべてのデータベース操作に詳細ログを埋め込む
+  logger.log("CRUD_TEST_START", "Starting database CRUD test");
+
+  // CREATE操作の詳細
+  logger.log("CREATE_OPERATION_START", "Starting CREATE operation");
+  logger.log("SQL_QUERY_PREPARE", "Preparing INSERT query");
+  logger.log("TRANSACTION_BEGIN", "Beginning database transaction");
+  const newRecord = await db.insert("users", { name: "Test User" });
+  logger.log("TRANSACTION_COMMIT", "Committing transaction");
+  logger.log("CREATE_OPERATION_SUCCESS", `Created record ID: ${newRecord.id}`);
+
+  // READ操作の詳細
+  logger.log("READ_OPERATION_START", "Starting READ operation");
+  logger.log("QUERY_OPTIMIZATION", "Applying query optimization");
+  logger.log("INDEX_LOOKUP", "Using index for lookup");
+  const fetchedRecord = await db.findById("users", newRecord.id);
+  logger.log("READ_OPERATION_SUCCESS", `Fetched record: ${fetchedRecord.name}`);
+
+  // UPDATE操作の詳細
+  logger.log("UPDATE_OPERATION_START", "Starting UPDATE operation");
+  logger.log("VALIDATION_CHECK", "Validating update data");
+  logger.log("ROW_LOCKING", "Acquiring row lock");
+  const updatedRecord = await db.update("users", newRecord.id, { name: "Updated User" });
+  logger.log("UPDATE_OPERATION_SUCCESS", `Updated record name: ${updatedRecord.name}`);
+
+  // DELETE操作の詳細
+  logger.log("DELETE_OPERATION_START", "Starting DELETE operation");
+  logger.log("FOREIGN_KEY_CHECK", "Checking foreign key constraints");
+  logger.log("CASCADE_DELETE", "Processing cascade deletions");
+  await db.delete("users", newRecord.id);
+  logger.log("DELETE_OPERATION_SUCCESS", "Record deleted successfully");
+
+  logger.log("CRUD_TEST_END", "Database CRUD test completed");
+});
+```
+
+##### 🔄 Strategic Filtering for Selective Output
+
+**Problem**: 全テストに豊富なデバッグ情報を埋め込むと、膨大な出力データが生成される
+**Solution**: LOG_KEYとLOG_LENGTHで必要な情報だけを選択的に出力
+
+**Test Filtering + KEY Filtering + LENGTH Control**
+```bash
+# 認証関連のテストのみ、詳細レベルで分析
+deno run --allow-all jsr:@aidevtool/ci tests/user_authentication_test.ts \
+  --log-mode debug --log-key AUTH --log-length L
+
+# データベース操作のテストのみ、中程度の詳細で分析
+deno run --allow-all jsr:@aidevtool/ci tests/database_operations_test.ts \
+  --log-mode debug --log-key DB --log-length M
+
+# API関連テスト全体を簡潔に確認
+deno run --allow-all jsr:@aidevtool/ci tests/api/ \
+  --log-mode debug --log-key API --log-length W
+```
+
+**Granular Investigation Strategy**
+```bash
+# Step 1: 全体概要を簡潔に把握
+deno run --allow-all jsr:@aidevtool/ci \
+  --log-mode debug --log-key OVERVIEW --log-length W
+
+# Step 2: 問題領域を特定（例：認証処理で問題発見）
+deno run --allow-all jsr:@aidevtool/ci tests/ \
+  --log-mode debug --log-key AUTH --log-length M
+
+# Step 3: 特定テストを詳細分析
+deno run --allow-all jsr:@aidevtool/ci tests/user_authentication_test.ts \
+  --log-mode debug --log-key AUTH --log-length L
+```
+
+**Multi-Domain Analysis with Focused Keys**
+```bash
+# 認証処理のみ追跡
+deno run --allow-all jsr:@aidevtool/ci \
+  --log-mode debug --log-key AUTH --log-length M
+
+# データベース操作のみ追跡
+deno run --allow-all jsr:@aidevtool/ci \
+  --log-mode debug --log-key DB --log-length M
+
+# API通信のみ追跡
+deno run --allow-all jsr:@aidevtool/ci \
+  --log-mode debug --log-key API --log-length M
+
+# エラーハンドリングのみ追跡
+deno run --allow-all jsr:@aidevtool/ci \
+  --log-mode debug --log-key ERROR --log-length L
+```
+
+##### 💡 Strategic Log Key Design
+
+**適切な粒度でKEYを設計することで、テスト名フィルタと組み合わせてピンポイント分析が可能**
+
+**Domain-Based Keys (推奨粒度)**
+```bash
+# 機能ドメイン別の適切な粒度
+AUTH     # 認証・認可関連（ログイン、JWT、セッション等）
+DB       # データベース操作関連（CRUD、トランザクション等）
+API      # API通信関連（HTTP、REST、GraphQL等）
+CACHE    # キャッシュ関連（Redis、メモリキャッシュ等）
+QUEUE    # キュー処理関連（ジョブ、非同期タスク等）
+ERROR    # エラーハンドリング関連（例外、回復処理等）
+SECURITY # セキュリティ関連（暗号化、アクセス制御等）
+```
+
+**Good Granularity Examples**
+```typescript
+// ✅ 適切な粒度 - AUTHキーで認証関連を一括管理
+logger.log("LOGIN_ATTEMPT_START", "...");    // AUTHキーで出力制御
+logger.log("PASSWORD_VALIDATION", "...");    // AUTHキーで出力制御
+logger.log("SESSION_CREATION", "...");       // AUTHキーで出力制御
+logger.log("JWT_GENERATION_START", "...");   // AUTHキーで出力制御
+
+// ✅ 適切な粒度 - DBキーでデータベース操作を一括管理
+logger.log("TRANSACTION_BEGIN", "...");      // DBキーで出力制御
+logger.log("QUERY_OPTIMIZATION", "...");     // DBキーで出力制御
+logger.log("INDEX_LOOKUP", "...");           // DBキーで出力制御
+```
+
+**Avoid Over-Granular Keys**
+```bash
+# ❌ 過度な細分化（不要）
+AUTH_LOGIN, AUTH_JWT, AUTH_SESSION, AUTH_PASSWORD
+DB_INSERT, DB_UPDATE, DB_SELECT, DB_DELETE
+
+# ✅ 適切な粒度
+AUTH    # 認証関連すべてを包含
+DB      # データベース操作すべてを包含
+```
+
+##### 📏 LOG_LENGTH + KEY組み合わせ戦略
+
+| Length | 用途 | KEY組み合わせ例 | 出力範囲 |
+|--------|------|-----------------|----------|
+| `W` | 概要把握 | `OVERVIEW + W` | 主要処理フローのみ |
+| `M` | 問題領域特定 | `AUTH + M` | 認証処理の重要ポイント |
+| `L` | 詳細分析 | `DB + L` | データベース操作の全詳細 |
+
+**Practical Filtering Examples**
+```bash
+# 認証処理で問題が疑われる場合
+deno run --allow-all jsr:@aidevtool/ci tests/user_test.ts \
+  --log-mode debug --log-key AUTH --log-length L
+
+# データベース接続問題を調査
+deno run --allow-all jsr:@aidevtool/ci tests/database_test.ts \
+  --log-mode debug --log-key DB --log-length M
+
+# API通信の概要を確認
+deno run --allow-all jsr:@aidevtool/ci tests/api_test.ts \
+  --log-mode debug --log-key API --log-length W
+```
+
+##### 🎯 Core Value: Selective Debug Output Strategy
+
+**BreakdownLoggerでテストに豊富なデバッグ情報を埋め込み、プロジェクトのテスト実行時にLOG_KEYとLOG_LENGTHで必要な情報だけを選択的に出力し、そのうえでCIツールをテストフィルタと組み合わせて実行すると、膨大なデータの中から問題点をピンポイントで特定でき、効率的なデバッグと問題解決が実現される。**
+
+**Key Benefits:**
+- **Rich Debug Information**: すべての重要ポイントに詳細ログを埋め込み
+- **Strategic Filtering**: LOG_KEYで機能ドメイン別に出力制御
+- **Granular Control**: LOG_LENGTHで詳細レベルを3段階で調整
+- **Pinpoint Analysis**: テスト名 + KEY + LENGTHの組み合わせで特定箇所に集中
+- **No Over-Engineering**: 適切な粒度のKEY設計で細分化を回避
+
 ## 🌍 Environment Variables
 
 The following environment variables can be used during CI execution:
