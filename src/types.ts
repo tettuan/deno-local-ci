@@ -394,6 +394,46 @@ export interface ProgressIndicator {
   fallbackMessage?: string;
 }
 
+/**
+ * Enhanced progress indicator with stage-based progress management.
+ * Provides accurate progress tracking based on actual processing units per stage.
+ */
+export interface EnhancedProgressIndicator {
+  // Stage-level progress
+  /** Current stage name */
+  currentStage: string;
+  /** Current stage number (1-based) */
+  stageNumber: number;
+  /** Total number of stages */
+  totalStages: number;
+  /** Progress within current stage (0-100) */
+  stageProgress: number;
+
+  // File-level details for current stage
+  /** Files processed in current stage */
+  currentStageFiles: number;
+  /** Total files to process in current stage */
+  totalStageFiles: number;
+
+  // Error information
+  /** Number of files with errors */
+  errorFiles: number;
+  /** Total count of individual errors */
+  totalErrorCount: number;
+
+  // Fallback information
+  /** Whether in fallback mode */
+  isFallback: boolean;
+  /** Fallback description message */
+  fallbackMessage?: string;
+
+  // Additional metadata
+  /** Duration of current stage in milliseconds */
+  stageDuration?: number;
+  /** Estimated time remaining in milliseconds */
+  estimatedTimeRemaining?: number;
+}
+
 // === CI実行サマリー統計情報 ===
 export interface CISummaryStats {
   /** ステージ統計 */

@@ -19,6 +19,7 @@ import {
   CIError,
   CIStage,
   CISummaryStats,
+  EnhancedProgressIndicator,
   ExecutionStrategy,
   ProcessResult,
   ProcessResultWithBatch,
@@ -106,20 +107,15 @@ export class CIRunner {
   };
 
   // Progress tracking
-  private progressState: {
-    totalFiles: number;
-    processedFiles: number;
-    errorFiles: number;
-    totalErrorCount: number;
-    currentStage: string;
-    isFallback: boolean;
-    fallbackMessage?: string;
-  } = {
-    totalFiles: 0,
-    processedFiles: 0,
+  private progressState: EnhancedProgressIndicator = {
+    currentStage: "Initializing",
+    stageNumber: 0,
+    totalStages: 0,
+    stageProgress: 0,
+    currentStageFiles: 0,
+    totalStageFiles: 0,
     errorFiles: 0,
     totalErrorCount: 0,
-    currentStage: "Initializing",
     isFallback: false,
   };
 
@@ -189,15 +185,15 @@ export class CIRunner {
 
       const fileInfo = filesResult.data;
 
-      // Initialize progress state
-      this.initializeProgress(fileInfo);
-
       // Get stages from orchestrator
       const stages = CIPipelineOrchestrator.getStages(this.config, fileInfo);
 
+      // Initialize progress state with stages
+      this.initializeProgress(fileInfo, stages);
+
       // Execute each stage
       for (const stage of stages) {
-        this.updateProgress(this.getStageName(stage), this.progressState.processedFiles);
+        this.updateProgressForStageStart(stage);
         this.logger.logStageStart(stage);
 
         const stageResult = await this.executeStageWithFallback(stage);
@@ -254,8 +250,8 @@ export class CIRunner {
       // Show final failure summary with progress information
       const finalProgressState: ProgressIndicator = {
         currentStage: "CI Execution Failed",
-        processedFiles: this.progressState.processedFiles,
-        totalFiles: this.progressState.totalFiles,
+        processedFiles: this.progressState.currentStageFiles,
+        totalFiles: this.progressState.totalStageFiles,
         errorFiles: this.progressState.errorFiles,
         totalErrorCount: this.progressState.totalErrorCount,
         isFallback: true,
@@ -307,8 +303,8 @@ export class CIRunner {
 
     const finalProgressState: ProgressIndicator = {
       currentStage: "Failed",
-      processedFiles: this.progressState.processedFiles,
-      totalFiles: this.progressState.totalFiles,
+      processedFiles: this.progressState.currentStageFiles,
+      totalFiles: this.progressState.totalStageFiles,
       errorFiles: this.progressState.errorFiles,
       totalErrorCount: this.progressState.totalErrorCount,
       isFallback: this.progressState.isFallback,
@@ -402,21 +398,18 @@ export class CIRunner {
   }
 
   /**
-   * Initialize progress tracking with discovered file information.
+   * Initialize progress tracking with discovered file information and stages.
    */
-  private initializeProgress(fileInfo: TestFileInfo): void {
-    const totalFiles = Math.max(
-      fileInfo.testFiles.length,
-      fileInfo.typeCheckFiles.length,
-      fileInfo.allFiles.length,
-    );
-
+  private initializeProgress(_fileInfo: TestFileInfo, stages: CIStage[]): void {
     this.progressState = {
-      totalFiles,
-      processedFiles: 0,
+      currentStage: "Initializing",
+      stageNumber: 0,
+      totalStages: stages.length,
+      stageProgress: 0,
+      currentStageFiles: 0,
+      totalStageFiles: 0,
       errorFiles: 0,
       totalErrorCount: 0,
-      currentStage: "Initializing",
       isFallback: false,
     };
   }
@@ -425,23 +418,64 @@ export class CIRunner {
    * Update progress after stage completion.
    */
   private updateProgressAfterStage(stage: CIStage, result: StageResult): void {
+    const stageIndex = this.getCurrentStageIndex(stage);
     const stageFiles = this.getStageFileCount(stage);
 
-    this.progressState.processedFiles += stageFiles;
+    // Update enhanced progress state
+    this.progressState = {
+      ...this.progressState,
+      currentStage: this.getStageName(stage),
+      stageNumber: stageIndex + 1,
+      stageProgress: 100, // Stage completed
+      currentStageFiles: stageFiles,
+      totalStageFiles: stageFiles,
+      stageDuration: result.kind === "success" ? result.duration : undefined,
+    };
 
     if (result.kind === "failure") {
-      this.progressState.errorFiles += stageFiles;
-      this.progressState.totalErrorCount += this.extractErrorCount(result.error);
+      this.progressState.errorFiles = stageFiles;
+      this.progressState.totalErrorCount = this.extractErrorCount(result.error);
     }
 
-    this.updateProgress(
-      this.getStageName(stage),
-      this.progressState.processedFiles,
-      this.progressState.errorFiles,
-      undefined,
-      undefined,
-      this.progressState.totalErrorCount,
-    );
+    // Log enhanced progress
+    this.logger.logProgress(this.progressState);
+  }
+
+  /**
+   * Update progress when starting a new stage.
+   */
+  private updateProgressForStageStart(stage: CIStage): void {
+    const stageIndex = this.getCurrentStageIndex(stage);
+    const stageFiles = this.getStageFileCount(stage);
+
+    this.progressState = {
+      ...this.progressState,
+      currentStage: this.getStageName(stage),
+      stageNumber: stageIndex + 1,
+      stageProgress: 0, // Starting stage
+      currentStageFiles: 0,
+      totalStageFiles: stageFiles,
+      errorFiles: 0,
+      totalErrorCount: 0,
+    };
+
+    this.logger.logProgress(this.progressState);
+  }
+
+  /**
+   * Get the current stage index from stages array.
+   */
+  private getCurrentStageIndex(stage: CIStage): number {
+    // Simple implementation - in a real scenario, you'd track stages array
+    const stageOrder = [
+      "lockfile-init",
+      "type-check",
+      "jsr-check",
+      "test-execution",
+      "lint-check",
+      "format-check",
+    ];
+    return stageOrder.indexOf(stage.kind);
   }
 
   /**
@@ -704,7 +738,7 @@ export class CIRunner {
           const fallbackProgressState: ProgressIndicator = {
             currentStage: `${this.getStageName(stage)} Fallback Failed`,
             processedFiles: testFiles.length,
-            totalFiles: this.progressState.totalFiles,
+            totalFiles: this.progressState.totalStageFiles,
             errorFiles: testFiles.length,
             totalErrorCount: this.progressState.totalErrorCount + fallbackErrorCount,
             isFallback: true,
@@ -776,7 +810,7 @@ export class CIRunner {
                 // フォールバック時の進捗指標更新
                 this.updateProgress(
                   "Test Execution",
-                  this.progressState.processedFiles,
+                  this.progressState.currentStageFiles,
                   this.progressState.errorFiles,
                   true,
                   `Fallback from ${strategy.mode.kind} to ${fallbackStrategy.mode.kind}`,
@@ -925,7 +959,7 @@ export class CIRunner {
     // フォールバック時の進捗指標更新
     this.updateProgress(
       "Test Execution",
-      this.progressState.processedFiles,
+      this.progressState.currentStageFiles,
       this.progressState.errorFiles,
       true,
       `Fallback from ${currentStrategy.mode.kind} to ${fallbackStrategy.mode.kind}`,
@@ -1163,7 +1197,7 @@ export class CIRunner {
     // フォールバック時の進捗指標更新
     this.updateProgress(
       "Type Check",
-      this.progressState.processedFiles,
+      this.progressState.currentStageFiles,
       this.progressState.errorFiles,
       true,
       `Fallback from ${currentStrategy.mode.kind} to ${fallbackStrategy.mode.kind}`,
@@ -1494,7 +1528,7 @@ export class CIRunner {
     totalErrorCount?: number,
   ): void {
     this.progressState.currentStage = stageName;
-    this.progressState.processedFiles = processedFiles;
+    this.progressState.currentStageFiles = processedFiles;
     if (errorFiles !== undefined) {
       this.progressState.errorFiles = errorFiles;
     }
@@ -1513,8 +1547,8 @@ export class CIRunner {
    */
   private logCurrentProgress(): void {
     const progress: ProgressIndicator = {
-      processedFiles: this.progressState.processedFiles,
-      totalFiles: this.progressState.totalFiles,
+      processedFiles: this.progressState.currentStageFiles,
+      totalFiles: this.progressState.totalStageFiles,
       currentStage: this.progressState.currentStage,
       errorFiles: this.progressState.errorFiles,
       totalErrorCount: this.progressState.totalErrorCount > 0

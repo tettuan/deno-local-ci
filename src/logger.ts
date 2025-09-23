@@ -21,6 +21,7 @@ import {
   CIStage,
   CISummaryStats,
   createError,
+  EnhancedProgressIndicator,
   LogMode,
   ProgressIndicator,
   Result,
@@ -286,20 +287,61 @@ export class CILogger {
   /**
    * Log progress indicator per architecture design.
    */
-  logProgress(indicator: ProgressIndicator): void {
+  logProgress(indicator: ProgressIndicator | EnhancedProgressIndicator): void {
     if (this.mode.kind === "silent") {
       return;
     }
 
-    const percentage = indicator.totalFiles > 0
-      ? Math.round((indicator.processedFiles / indicator.totalFiles) * 100)
-      : 0;
+    // Check if it's the enhanced indicator
+    const isEnhanced = "stageNumber" in indicator && "totalStages" in indicator;
 
-    const progressMsg =
-      `📊 Progress: ${indicator.processedFiles}/${indicator.totalFiles} files (${percentage}%) | ` +
-      `Stage: ${indicator.currentStage} | Errors: ${indicator.errorFiles}`;
+    let progressMsg: string;
 
-    if (indicator.isFallback && indicator.fallbackMessage) {
+    if (isEnhanced) {
+      const enhanced = indicator as EnhancedProgressIndicator;
+
+      // Enhanced format: Stage X/Y: Stage Name | Files: N/M (P%) | Duration: Xs | Errors: E
+      const stageInfo =
+        `Stage ${enhanced.stageNumber}/${enhanced.totalStages}: ${enhanced.currentStage}`;
+
+      let progressDetails = "";
+      if (enhanced.totalStageFiles > 0) {
+        const percentage = enhanced.totalStageFiles > 0
+          ? Math.round((enhanced.currentStageFiles / enhanced.totalStageFiles) * 100)
+          : 0;
+        progressDetails =
+          ` | Files: ${enhanced.currentStageFiles}/${enhanced.totalStageFiles} (${percentage}%)`;
+      }
+
+      let durationInfo = "";
+      if (enhanced.stageDuration) {
+        durationInfo = ` | Duration: ${(enhanced.stageDuration / 1000).toFixed(2)}s`;
+      }
+
+      let errorInfo = "";
+      if (enhanced.errorFiles > 0) {
+        errorInfo = ` | Errors: ${enhanced.errorFiles}`;
+      }
+
+      let fallbackInfo = "";
+      if (enhanced.isFallback && enhanced.fallbackMessage) {
+        fallbackInfo = ` (${enhanced.fallbackMessage})`;
+      }
+
+      progressMsg = `📊 ${stageInfo}${fallbackInfo}${progressDetails}${durationInfo}${errorInfo}`;
+    } else {
+      // Legacy format for backward compatibility
+      const legacy = indicator as ProgressIndicator;
+      const percentage = legacy.totalFiles > 0
+        ? Math.round((legacy.processedFiles / legacy.totalFiles) * 100)
+        : 0;
+
+      progressMsg =
+        `📊 Progress: ${legacy.processedFiles}/${legacy.totalFiles} files (${percentage}%) | ` +
+        `Stage: ${legacy.currentStage} | Errors: ${legacy.errorFiles}`;
+    }
+
+    if (indicator.isFallback && indicator.fallbackMessage && !isEnhanced) {
       const fallbackMsg = `🔄 ${indicator.fallbackMessage}`;
       this.logInfo(fallbackMsg);
     }
@@ -317,7 +359,10 @@ export class CILogger {
         break;
       case "error-files-only":
         if (indicator.errorFiles > 0) {
-          console.log(`Errors: ${indicator.errorFiles}/${indicator.totalFiles} files`);
+          const totalFiles = isEnhanced
+            ? (indicator as EnhancedProgressIndicator).totalStageFiles
+            : (indicator as ProgressIndicator).totalFiles;
+          console.log(`Errors: ${indicator.errorFiles}/${totalFiles} files`);
         }
         break;
     }
