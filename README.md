@@ -10,15 +10,23 @@ safety.
 
 ## ✨ Features
 
-- 🔄 **Complete CI Pipeline**: Type check → JSR check → Test → Lint → Format with stage-based progress tracking
-- 🎯 **Multiple Execution Modes**: Single-file, batch, and all modes for different project needs with intelligent fallback
-- 🛡️ **Type Safety**: Full TypeScript support with strict type checking and comprehensive error reporting
-- 📊 **Enhanced Progress Display**: Stage-based progress tracking (Stage X/Y) with accurate file counts and timing
-- ⚙️ **Flexible Configuration**: Customizable batch sizes, log modes, and directory targeting options
+- 🔄 **Complete CI Pipeline**: Type check → JSR check → Test → Lint → Format with stage-based
+  progress tracking
+- 🎯 **Multiple Execution Modes**: Single-file, batch, and all modes for different project needs
+  with intelligent fallback
+- 🛡️ **Type Safety**: Full TypeScript support with strict type checking and comprehensive error
+  reporting
+- 📊 **Enhanced Progress Display**: Stage-based progress tracking (Stage X/Y) with accurate file
+  counts and timing
+- ⚙️ **Flexible Configuration**: Customizable batch sizes, log modes, and directory targeting
+  options
 - 🔧 **Smart Error Handling**: Structured error categorization with automatic fallback strategies
-- 📝 **Advanced Logging**: BreakdownLogger integration for selective debug output and pinpoint analysis
-- ⚡ **Performance Optimized**: Memory-efficient processing with intelligent batching for large test suites
-- 🏗️ **Domain-Driven Design**: Clean architecture documented in `docs/architecture/` with modular components
+- 📝 **Advanced Logging**: BreakdownLogger integration for selective debug output and pinpoint
+  analysis
+- ⚡ **Performance Optimized**: Memory-efficient processing with intelligent batching for large test
+  suites
+- 🏗️ **Domain-Driven Design**: Clean architecture documented in `docs/architecture/` with modular
+  components
 
 ## 🚀 Installation
 
@@ -432,9 +440,12 @@ deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci \
 
 #### 🔬 BreakdownLogger Integration Strategy
 
-BreakdownLogger enables detailed flow tracking with timestamp precision. By embedding comprehensive debug information in tests and using LOG_KEY and LOG_LENGTH for selective output, you can pinpoint specific issues within vast amounts of data.
+BreakdownLogger enables detailed flow tracking with timestamp precision. By embedding comprehensive
+debug information in tests and using LOG_KEY and LOG_LENGTH for selective output, you can pinpoint
+specific issues within vast amounts of data.
 
-**Core Concept**: Embed rich debug information everywhere, then filter strategically during execution.
+**Core Concept**: Embed rich debug information everywhere, then filter strategically during
+execution.
 
 - **Rich Debug Information**: Embed detailed logs at every important checkpoint
 - **Strategic Filtering**: Use LOG_KEY to focus on specific functional domains
@@ -444,6 +455,7 @@ BreakdownLogger enables detailed flow tracking with timestamp precision. By embe
 ##### 🧪 Implementation: Embedding Rich Debug Information
 
 **Step 1: Add comprehensive logging to your tests**
+
 ```typescript
 // tests/user_auth_test.ts
 import { BreakdownLogger } from "@tettuan/breakdownlogger";
@@ -469,7 +481,7 @@ Deno.test("User authentication workflow", async () => {
 
   logger.log("API_REQUEST_START", "Making authenticated request");
   const response = await fetch("/api/profile", {
-    headers: { Authorization: `Bearer ${token}` }
+    headers: { Authorization: `Bearer ${token}` },
   });
   logger.log("API_RESPONSE_RECEIVED", `Status: ${response.status}`);
 
@@ -479,10 +491,11 @@ Deno.test("User authentication workflow", async () => {
 
 ##### 🔄 Step 2: Strategic Filtering During Execution
 
-**Problem**: Rich debug information in all tests generates overwhelming output.
-**Solution**: Use LOG_KEY and LOG_LENGTH to selectively filter what you need.
+**Problem**: Rich debug information in all tests generates overwhelming output. **Solution**: Use
+LOG_KEY and LOG_LENGTH to selectively filter what you need.
 
 **Filtering Strategy: Test + KEY + LENGTH**
+
 ```bash
 # Focus on authentication tests with detailed output
 deno run --allow-all jsr:@aidevtool/ci tests/user_auth_test.ts \
@@ -498,6 +511,7 @@ deno run --allow-all jsr:@aidevtool/ci tests/api/ \
 ```
 
 **Progressive Investigation Workflow**
+
 ```bash
 # 1. Overview: Get the big picture (fast)
 deno run --allow-all jsr:@aidevtool/ci \
@@ -528,20 +542,22 @@ SECURITY # Security operations (encryption, access control)
 ```
 
 **Implementation Example**
+
 ```typescript
 // ✅ Good: Use domain-based keys
-logger.log("LOGIN_ATTEMPT_START", "...");   // Controlled by AUTH key
-logger.log("PASSWORD_VALIDATION", "...");   // Controlled by AUTH key
-logger.log("SESSION_CREATION", "...");      // Controlled by AUTH key
-logger.log("JWT_GENERATION_START", "...");  // Controlled by AUTH key
+logger.log("LOGIN_ATTEMPT_START", "..."); // Controlled by AUTH key
+logger.log("PASSWORD_VALIDATION", "..."); // Controlled by AUTH key
+logger.log("SESSION_CREATION", "..."); // Controlled by AUTH key
+logger.log("JWT_GENERATION_START", "..."); // Controlled by AUTH key
 
 // ✅ Good: Database operations under DB key
-logger.log("TRANSACTION_BEGIN", "...");     // Controlled by DB key
-logger.log("QUERY_OPTIMIZATION", "...");    // Controlled by DB key
-logger.log("INDEX_LOOKUP", "...");          // Controlled by DB key
+logger.log("TRANSACTION_BEGIN", "..."); // Controlled by DB key
+logger.log("QUERY_OPTIMIZATION", "..."); // Controlled by DB key
+logger.log("INDEX_LOOKUP", "..."); // Controlled by DB key
 ```
 
 **Avoid Over-Granular Keys**
+
 ```bash
 # ❌ Too granular (unnecessary)
 AUTH_LOGIN, AUTH_JWT, AUTH_SESSION, AUTH_PASSWORD
@@ -552,17 +568,21 @@ AUTH    # Covers all authentication concerns
 
 **LOG_LENGTH Strategy**
 
-| Length | Use Case | Example | Output Scope |
-|--------|----------|---------|--------------|
-| `W` | Quick overview | `OVERVIEW + W` | Main flow only |
-| `M` | Problem identification | `AUTH + M` | Key checkpoints |
-| `L` | Detailed analysis | `DB + L` | Full operation details |
+| Length | Use Case               | Example        | Output Scope           |
+| ------ | ---------------------- | -------------- | ---------------------- |
+| `W`    | Quick overview         | `OVERVIEW + W` | Main flow only         |
+| `M`    | Problem identification | `AUTH + M`     | Key checkpoints        |
+| `L`    | Detailed analysis      | `DB + L`       | Full operation details |
 
 ##### 🎯 Summary: Selective Debug Output Strategy
 
-**Core Value**: Embed comprehensive debug information in all tests, then use LOG_KEY and LOG_LENGTH to selectively filter output during CI execution. This approach enables pinpoint problem identification within vast amounts of data, making debugging and problem resolution highly efficient.
+**Core Value**: Embed comprehensive debug information in all tests, then use LOG_KEY and LOG_LENGTH
+to selectively filter output during CI execution. This approach enables pinpoint problem
+identification within vast amounts of data, making debugging and problem resolution highly
+efficient.
 
 **Benefits:**
+
 - **Rich Debug Information**: Log every important checkpoint in your tests
 - **Strategic Filtering**: Use LOG_KEY to focus on specific functional domains
 - **Granular Control**: Adjust detail level with LOG_LENGTH (W/M/L)
@@ -653,7 +673,9 @@ deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci \
 
 ## 🏗️ Architecture
 
-The CI runner follows Domain-Driven Design principles with clean separation of concerns. For detailed architectural documentation, see [`docs/architecture/class-design.md`](docs/architecture/class-design.md).
+The CI runner follows Domain-Driven Design principles with clean separation of concerns. For
+detailed architectural documentation, see
+[`docs/architecture/class-design.md`](docs/architecture/class-design.md).
 
 ### Core Components
 
