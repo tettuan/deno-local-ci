@@ -163,6 +163,27 @@ export type TestFileType =
   | { kind: "typecheck"; pattern: "*.ts" | "*.tsx" | "*.d.ts" }
   | { kind: "config"; pattern: "deno.json" | "deno.lock" | "import_map.json" };
 
+// === File Discovery Types ===
+
+/**
+ * Information about discovered project files categorized by purpose.
+ *
+ * Used by the infrastructure layer to communicate file discovery results
+ * to the domain and application layers.
+ */
+export interface TestFileInfo {
+  /** Test files matching patterns *_test.ts, *.test.ts */
+  testFiles: string[];
+  /** TypeScript files for type checking (*.ts, *.tsx, *.d.ts) */
+  typeCheckFiles: string[];
+  /** All relevant files for linting and formatting */
+  allFiles: string[];
+  /** Root directory where files were discovered */
+  projectRoot: string;
+  /** Hierarchy restriction applied during discovery (null = project-wide) */
+  hierarchy: string | null;
+}
+
 // === ログ・診断機能 ===
 export type LogMode =
   | { kind: "normal"; showSections: true }

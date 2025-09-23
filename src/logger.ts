@@ -18,7 +18,6 @@
 import { BreakdownLogger } from "@tettuan/breakdownlogger";
 import {
   BreakdownLoggerEnvConfig,
-  CIError,
   CIStage,
   CISummaryStats,
   createError,
@@ -28,6 +27,67 @@ import {
   StageResult,
   ValidationError,
 } from "./types.ts";
+
+/**
+ * Factory for creating LogMode instances with type safety.
+ *
+ * Provides convenient methods for creating different log modes
+ * according to the architecture design.
+ */
+export class LogModeFactory {
+  private constructor() {}
+
+  /**
+   * Create normal log mode with section display.
+   */
+  static normal(): LogMode {
+    return {
+      kind: "normal",
+      showSections: true,
+    };
+  }
+
+  /**
+   * Create silent log mode (errors only).
+   */
+  static silent(): LogMode {
+    return {
+      kind: "silent",
+      errorsOnly: true,
+    };
+  }
+
+  /**
+   * Create debug log mode with BreakdownLogger configuration.
+   */
+  static debug(
+    verboseLevel: "high" = "high",
+    logLength: "W" | "M" | "L" = "M",
+    logKey: string = "CI_DEBUG",
+  ): LogMode {
+    const breakdownResult = BreakdownLoggerEnvConfig.create(logLength, logKey);
+    if (!breakdownResult.ok) {
+      // Fallback to normal mode if config creation fails
+      return LogModeFactory.normal();
+    }
+
+    return {
+      kind: "debug",
+      verboseLevel,
+      breakdownLoggerEnv: breakdownResult.data,
+    };
+  }
+
+  /**
+   * Create error-files-only mode.
+   */
+  static errorFilesOnly(): LogMode {
+    return {
+      kind: "error-files-only",
+      implicitSilent: true,
+    };
+  }
+}
 
 /**
  * CI-specialized logger with multiple output modes and BreakdownLogger integration.
@@ -40,9 +100,8 @@ import {
  * import { CILogger, LogModeFactory } from "@aidevtool/ci";
  *
  * // Create logger with debug mode
- * const mode = LogModeFactory.debug();
- * const config = { key: "CI_DEBUG", length: "M" };
- * const loggerResult = CILogger.create(mode, config);
+ * const mode = LogModeFactory.debug("high", "M", "CI_DEBUG");
+ * const loggerResult = CILogger.create(mode);
  *
  * if (loggerResult.ok) {
  *   const logger = loggerResult.data;
@@ -50,7 +109,8 @@ import {
  *   logger.logStageStart({
  *     kind: "type-check",
  *     files: ["src/main.ts"],
- *     optimized: true
+ *     optimized: true,
+ *     hierarchy: null
  *   });
  * }
  * ```
@@ -60,76 +120,154 @@ export class CILogger {
 
   private constructor(
     private readonly mode: LogMode,
-    private readonly breakdownConfig?: BreakdownLoggerEnvConfig,
   ) {
-    // DebugモードでBreakdownLoggerインスタンスを作成
-    if (mode.kind === "debug" && breakdownConfig) {
+    // Create BreakdownLogger instance for debug mode
+    if (mode.kind === "debug") {
       this.breakdownLogger = new BreakdownLogger();
     }
   }
 
+  /**
+   * Create CILogger instance with the specified mode.
+   *
+   * @param mode - Log mode configuration
+   * @returns Result containing CILogger instance or validation error
+   */
   static create(
     mode: LogMode,
-    breakdownConfig?: BreakdownLoggerEnvConfig,
   ): Result<CILogger, ValidationError & { message: string }> {
-    // DebugモードでBreakdownLoggerが必要な場合の検証
-    if (mode.kind === "debug" && !breakdownConfig) {
+    // Validate debug mode configuration
+    if (mode.kind === "debug" && !mode.breakdownLoggerEnv) {
       return {
         ok: false,
         error: createError({
           kind: "EmptyInput",
-        }, "BreakdownLoggerEnvConfig is required for debug mode"),
+        }, "BreakdownLoggerEnv configuration is required for debug mode"),
       };
     }
 
-    return { ok: true, data: new CILogger(mode, breakdownConfig) };
+    return { ok: true, data: new CILogger(mode) };
   }
 
   /**
-   * BreakdownLogger環境変数設定
+   * Setup BreakdownLogger environment variables for debug mode.
    */
   setupBreakdownLogger(): void {
-    if (this.mode.kind === "debug" && this.breakdownConfig) {
-      this.breakdownConfig.setEnvironmentVariables();
+    if (this.mode.kind === "debug" && this.mode.breakdownLoggerEnv) {
+      this.mode.breakdownLoggerEnv.setEnvironmentVariables();
+    }
+  }
 
-      // BreakdownLogger v1.0.x では環境変数でログレベルを制御
-      // setLogLevel メソッドは削除されました
+  // === Core Logging Methods per Architecture Design ===
+
+  /**
+   * Log general information message.
+   */
+  logInfo(message: string): void {
+    if (this.mode.kind === "silent" || this.mode.kind === "error-files-only") {
+      return;
+    }
+
+    switch (this.mode.kind) {
+      case "normal":
+        console.log(message);
+        break;
+      case "debug":
+        if (this.breakdownLogger) {
+          this.breakdownLogger.info(message);
+        } else {
+          console.log(`[INFO] ${message}`);
+        }
+        break;
     }
   }
 
   /**
-   * CI段階開始ログ
+   * Log debug information for detailed tracing.
+   */
+  logDebug(message: string, details?: Record<string, unknown>): void {
+    if (this.mode.kind !== "debug") return;
+
+    if (this.breakdownLogger) {
+      this.breakdownLogger.debug(message, details);
+    } else {
+      console.log(`[DEBUG] ${message}`);
+      if (details) {
+        console.log(JSON.stringify(details, null, 2));
+      }
+    }
+  }
+
+  /**
+   * Log error information.
+   */
+  logError(message: string, error?: unknown): void {
+    const errorStr = error instanceof Error
+      ? error.message
+      : typeof error === "string"
+      ? error
+      : JSON.stringify(error);
+
+    switch (this.mode.kind) {
+      case "normal":
+      case "silent":
+        console.error(`❌ ${message}`);
+        if (errorStr) {
+          console.error(`   ${errorStr}`);
+        }
+        break;
+      case "debug":
+        if (this.breakdownLogger) {
+          this.breakdownLogger.error(`${message}: ${errorStr}`);
+        } else {
+          console.error(`[ERROR] ${message}: ${errorStr}`);
+        }
+        break;
+      case "error-files-only":
+        console.error(`${message}: ${errorStr}`);
+        break;
+    }
+  }
+
+  /**
+   * Log CI stage start per architecture design.
    */
   logStageStart(stage: CIStage): void {
-    if (this.mode.kind === "silent") return;
+    if (this.mode.kind === "silent" || this.mode.kind === "error-files-only") {
+      return;
+    }
 
     const stageName = this.getStageName(stage);
     const commandInfo = this.getCommandInfo(stage);
 
     switch (this.mode.kind) {
       case "normal":
-        console.log(`\nStarting ${stageName}...`);
+        console.log(`\n🔄 Starting ${stageName}...`);
         if (commandInfo) {
-          console.log(`└─ ${commandInfo}`);
+          console.log(`   └─ ${commandInfo}`);
         }
         break;
       case "debug":
-        console.log(`\n[DEBUG] Starting ${stageName}...`);
-        if (commandInfo) {
-          console.log(`└─ ${commandInfo}`);
+        if (this.breakdownLogger) {
+          this.breakdownLogger.info(`Starting ${stageName}`);
+          if (commandInfo) {
+            this.breakdownLogger.debug(`Command: ${commandInfo}`);
+          }
+        } else {
+          console.log(`\n[DEBUG] Starting ${stageName}...`);
+          if (commandInfo) {
+            console.log(`   └─ ${commandInfo}`);
+          }
         }
         this.logStageDetails(stage);
-        break;
-      case "error-files-only":
-        // 開始ログは表示しない
         break;
     }
   }
 
   /**
-   * CI段階結果ログ
+   * Log CI stage completion per architecture design.
    */
-  logStageResult(result: StageResult): void {
+  logStageComplete(result: StageResult): void {
     const stageName = this.getStageName(result.stage);
 
     switch (result.kind) {
@@ -146,210 +284,125 @@ export class CILogger {
   }
 
   /**
-   * エラーファイル一覧表示
+   * Log progress indicator per architecture design.
    */
-  logErrorFiles(error: CIError): void {
-    if (this.mode.kind === "silent") return;
-
-    const files = this.extractErrorFiles(error);
-    if (files.length === 0) return;
-
-    if (this.mode.kind === "error-files-only") {
-      // エラーファイルのみ表示
-      console.log("Error files:");
-      files.forEach((file) => console.log(`  - ${file}`));
+  logProgress(indicator: ProgressIndicator): void {
+    if (this.mode.kind === "silent") {
       return;
     }
 
-    // ファイル数の情報を追加
-    const fileCountText = files.length === 1
-      ? "1 file with errors"
-      : `${files.length} files with errors`;
+    const percentage = indicator.totalFiles > 0
+      ? Math.round((indicator.processedFiles / indicator.totalFiles) * 100)
+      : 0;
 
-    console.log(`\n${fileCountText}:`);
-    files.forEach((file, index) => {
-      const prefix = index === files.length - 1 ? "  └─" : "  ├─";
-      console.log(`${prefix} ${file}`);
-    });
+    const progressMsg =
+      `📊 Progress: ${indicator.processedFiles}/${indicator.totalFiles} files (${percentage}%) | ` +
+      `Stage: ${indicator.currentStage} | Errors: ${indicator.errorFiles}`;
 
-    // TestFailureの場合は詳細エラーも表示
-    if (error.kind === "TestFailure" && error.errors.length > 0) {
-      console.log("\nError details:");
-      error.errors.slice(0, 3).forEach((errorMsg, index) => { // 最初の3つのエラーのみ表示
-        const prefix = index === Math.min(error.errors.length, 3) - 1 ? "  └─" : "  ├─";
-        const truncatedMsg = errorMsg.length > 100 ? errorMsg.substring(0, 100) + "..." : errorMsg;
-        console.log(`${prefix} ${truncatedMsg.split("\n")[0]}`); // 最初の行のみ
-      });
+    if (indicator.isFallback && indicator.fallbackMessage) {
+      const fallbackMsg = `🔄 ${indicator.fallbackMessage}`;
+      this.logInfo(fallbackMsg);
+    }
 
-      if (error.errors.length > 3) {
-        console.log(`  └─ ... and ${error.errors.length - 3} more errors`);
-      }
+    switch (this.mode.kind) {
+      case "normal":
+        console.log(progressMsg);
+        break;
+      case "debug":
+        if (this.breakdownLogger) {
+          this.breakdownLogger.info(progressMsg);
+        } else {
+          console.log(`[PROGRESS] ${progressMsg}`);
+        }
+        break;
+      case "error-files-only":
+        if (indicator.errorFiles > 0) {
+          console.log(`Errors: ${indicator.errorFiles}/${indicator.totalFiles} files`);
+        }
+        break;
     }
   }
 
   /**
-   * フォールバック通知ログ
+   * Print summary statistics per architecture design.
    */
-  logFallback(fromMode: string, toMode: string, reason: string): void {
-    if (this.mode.kind === "silent" || this.mode.kind === "error-files-only") return;
+  printSummary(stats: CISummaryStats): void {
+    if (this.mode.kind === "error-files-only") {
+      // Only show error file information
+      if (stats.files.fileInfoLines.length > 0) {
+        console.log("\n❌ Files with errors:");
+        stats.files.fileInfoLines.forEach((line) => console.log(`   ${line}`));
+      }
+      return;
+    }
 
-    console.log(`\nFalling back from ${fromMode} to ${toMode}`);
-    console.log(`   Reason: ${reason}`);
-  }
+    console.log("\n" + "=".repeat(60));
+    console.log("📋 CI EXECUTION SUMMARY");
+    console.log("=".repeat(60));
 
-  /**
-   * 進捗指標を表示
-   */
-  logProgress(progress: ProgressIndicator): void {
-    if (this.mode.kind === "silent" || this.mode.kind === "error-files-only") return;
+    // Stages summary
+    console.log(`📊 Stages: ${stats.stages.successful}/${stats.stages.total} successful`);
+    if (stats.stages.failed > 0) {
+      console.log(`❌ Failed stages: ${stats.stages.failed}`);
+    }
+    if (stats.stages.skipped > 0) {
+      console.log(`⏭️  Skipped stages: ${stats.stages.skipped}`);
+    }
 
-    const percentage = progress.totalFiles > 0
-      ? Math.min(100, Math.round((progress.processedFiles / progress.totalFiles) * 100))
-      : 0;
-    const progressBar = this.createProgressBar(percentage);
+    // Files summary
+    console.log(`📁 Files processed: ${stats.files.totalChecked}`);
+    console.log(`   ├─ Test files: ${stats.files.testFiles}`);
+    console.log(`   ├─ Type check files: ${stats.files.typeCheckFiles}`);
+    console.log(`   ├─ Lint files: ${stats.files.lintFiles}`);
+    console.log(`   └─ Format files: ${stats.files.formatFiles}`);
 
-    console.log(`\n[${progress.currentStage}] ${progressBar}`);
+    // Tests summary
+    if (stats.tests.totalTests > 0) {
+      console.log(`🧪 Tests: ${stats.tests.passedTests}/${stats.tests.totalTests} passed`);
+      if (stats.tests.failedTests > 0) {
+        console.log(`❌ Failed tests: ${stats.tests.failedTests}`);
+      }
+      if (stats.tests.skippedTests > 0) {
+        console.log(`⏭️  Skipped tests: ${stats.tests.skippedTests}`);
+      }
+    }
+
+    // Timing summary
+    console.log(`⏱️  Total time: ${(stats.timing.totalDuration / 1000).toFixed(2)}s`);
+    console.log(`   ├─ Average stage time: ${(stats.timing.averageStageTime / 1000).toFixed(2)}s`);
     console.log(
-      `📁 Files: ${Math.min(progress.processedFiles, progress.totalFiles)}/${progress.totalFiles}`,
+      `   └─ Longest stage: ${stats.timing.longestStage} (${
+        (stats.timing.longestStageDuration / 1000).toFixed(2)
+      }s)`,
     );
 
-    if (progress.errorFiles > 0) {
-      if (progress.totalErrorCount && progress.totalErrorCount > progress.errorFiles) {
-        console.log(
-          `❌ Errors: ${progress.totalErrorCount} errors in ${progress.errorFiles} files`,
-        );
-      } else {
-        console.log(`❌ Error files: ${progress.errorFiles}`);
-      }
-    }
-
-    if (progress.isFallback && progress.fallbackMessage) {
-      console.log(`⚠️  Fallback mode: ${progress.fallbackMessage}`);
-      if (progress.totalErrorCount) {
-        console.log(
-          `ℹ️  Note: Showing ${progress.totalErrorCount} errors found so far. Total count may be incomplete during fallback execution`,
-        );
-      } else {
-        console.log(`ℹ️  Note: Total error count may be incomplete during fallback execution`);
-      }
-    }
+    console.log("=".repeat(60));
   }
 
   /**
-   * プログレスバーの作成
-   */
-  private createProgressBar(percentage: number): string {
-    return `${percentage}%`;
-  }
-
-  /**
-   * 最終サマリーログ（詳細統計版）
+   * Legacy compatibility method for existing code.
    */
   logSummary(
     totalStages: number,
     successStages: number,
-    failedStages: number,
+    _failedStages: number,
     totalDuration: number,
     stats?: CISummaryStats,
   ): void {
-    if (this.mode.kind === "error-files-only" || this.mode.kind === "silent") return;
-
-    console.log("\n" + "=".repeat(50));
-    console.log("CI Execution Summary");
-    console.log("=".repeat(50));
-    console.log(`Total stages: ${totalStages}`);
-    console.log(`Successful: ${successStages}`);
-    console.log(`Failed: ${failedStages}`);
-    console.log(`Total duration: ${this.formatDuration(totalDuration)}`);
-
     if (stats) {
-      console.log("\n" + "Files Processed:");
-      // 追加: 実際のファイル数や実行数が記載された行全体をそのまま表示
-      if (Array.isArray(stats.files.fileInfoLines)) {
-        stats.files.fileInfoLines.forEach((line) => console.log(line));
-      }
-      // 従来のサマリーも残す場合は以下を有効化
-      // console.log(`📁 Total files checked: ${stats.files.totalChecked}`);
-      // if (stats.files.typeCheckFiles > 0) {
-      //   console.log(`📝 TypeScript files: ${stats.files.typeCheckFiles}`);
-      // }
-      // if (stats.files.testFiles > 0) {
-      //   console.log(`🧪 Test files: ${stats.files.testFiles}`);
-      // }
-      // if (stats.files.lintFiles > 0) {
-      //   console.log(`🔍 Lint checked files: ${stats.files.lintFiles}`);
-      // }
-
-      if (stats.tests.totalTests > 0) {
-        console.log("\n" + "Test Results:");
-        console.log(`🏃 Total tests run: ${stats.tests.totalTests}`);
-        console.log(`✅ Passed: ${stats.tests.passedTests}`);
-        if (stats.tests.failedTests > 0) {
-          console.log(`❌ Failed: ${stats.tests.failedTests}`);
-        }
-        if (stats.tests.skippedTests > 0) {
-          console.log(`⏭️  Skipped: ${stats.tests.skippedTests}`);
-        }
-      }
-
-      if (stats.timing.longestStage) {
-        console.log("\n" + "Performance:");
-        console.log(`⏱️ Average stage time: ${this.formatDuration(stats.timing.averageStageTime)}`);
-        console.log(
-          `🐌 Longest stage: ${stats.timing.longestStage} (${
-            this.formatDuration(stats.timing.longestStageDuration)
-          })`,
-        );
-      }
-    }
-
-    if (failedStages === 0) {
-      console.log("\n✅ All CI stages completed successfully!");
+      this.printSummary(stats);
     } else {
-      console.log(`\n❌ CI failed with ${failedStages} error(s)`);
+      // Simple summary for legacy calls
+      console.log("\n" + "=".repeat(40));
+      console.log("CI Summary");
+      console.log("=".repeat(40));
+      console.log(`Stages: ${successStages}/${totalStages} successful`);
+      console.log(`Duration: ${(totalDuration / 1000).toFixed(2)}s`);
+      console.log("=".repeat(40));
     }
   }
 
-  /**
-   * 情報ログ（silent モードでは出力しない）
-   */
-  logInfo(message: string): void {
-    if (this.mode.kind === "silent") return;
-
-    if (this.breakdownLogger) {
-      this.breakdownLogger.info(message);
-    } else {
-      console.log(message);
-    }
-  }
-
-  logDebug(message: string, context?: unknown): void {
-    if (this.mode.kind !== "debug") return;
-
-    if (this.breakdownLogger) {
-      this.breakdownLogger.debug(context ? `${message} ${JSON.stringify(context)}` : message);
-    } else {
-      console.log(`[DEBUG] ${message}${context ? ` ${JSON.stringify(context)}` : ""}`);
-    }
-  }
-
-  logError(message: string, error?: unknown): void {
-    if (this.breakdownLogger) {
-      this.breakdownLogger.error(error ? `${message}: ${error}` : message);
-    } else {
-      console.error(`[ERROR] ${message}${error ? `: ${error}` : ""}`);
-    }
-  }
-
-  logWarning(message: string): void {
-    if (this.breakdownLogger) {
-      this.breakdownLogger.warn(message);
-    } else {
-      console.warn(`[WARNING] ${message}`);
-    }
-  }
-
-  // === プライベートメソッド ===
+  // === Private Helper Methods ===
 
   private getStageName(stage: CIStage): string {
     switch (stage.kind) {
@@ -358,7 +411,7 @@ export class CILogger {
       case "type-check":
         return "Type Check";
       case "jsr-check":
-        return "JSR Compatibility Check";
+        return "JSR Check";
       case "test-execution":
         return "Test Execution";
       case "lint-check":
@@ -371,168 +424,100 @@ export class CILogger {
   private getCommandInfo(stage: CIStage): string | null {
     switch (stage.kind) {
       case "lockfile-init":
-        return "deno cache --reload mod.ts";
-      case "type-check": {
-        if (stage.hierarchy) {
-          return `deno check ${stage.hierarchy}`;
-        }
-        return stage.files.length > 0 ? `deno check <${stage.files.length} files>` : "deno check .";
-      }
-      case "jsr-check": {
-        if (stage.hierarchy) {
-          return null; // JSR check is skipped when hierarchy is specified
-        }
-        const jsrArgs = ["deno publish"];
-        if (stage.dryRun) jsrArgs.push("--dry-run");
-        if (stage.allowDirty) jsrArgs.push("--allow-dirty");
-        return jsrArgs.join(" ");
-      }
-      case "test-execution": {
-        const testArgs = ["deno test"];
-        // Default permissions
-        testArgs.push("--allow-read", "--allow-write", "--allow-run", "--allow-env");
-        if (stage.hierarchy) {
-          testArgs.push(stage.hierarchy);
-        } else if (stage.files && stage.files.length > 0) {
-          // 実際のテストファイルを表示
-          testArgs.push(...stage.files);
-        } else {
-          testArgs.push(".");
-        }
-        return testArgs.join(" ");
-      }
-      case "lint-check": {
-        if (stage.hierarchy) {
-          return `deno lint ${stage.hierarchy}`;
-        }
-        return stage.files.length > 0 ? `deno lint <${stage.files.length} files>` : "deno lint .";
-      }
-      case "format-check": {
-        const formatArgs = ["deno fmt"];
-        if (stage.hierarchy) {
-          formatArgs.push(stage.hierarchy);
-        } else {
-          formatArgs.push("<files>");
-        }
-        return formatArgs.join(" ");
-      }
-      default:
-        return null;
+        return "deno cache deps.ts";
+      case "type-check":
+        return stage.hierarchy ? `deno check ${stage.hierarchy}` : "deno check";
+      case "jsr-check":
+        return "deno publish --dry-run";
+      case "test-execution":
+        return stage.hierarchy ? `deno test ${stage.hierarchy}` : "deno test";
+      case "lint-check":
+        return stage.hierarchy ? `deno lint ${stage.hierarchy}` : "deno lint";
+      case "format-check":
+        return stage.hierarchy ? `deno fmt --check ${stage.hierarchy}` : "deno fmt --check";
     }
   }
 
   private logStageDetails(stage: CIStage): void {
-    switch (stage.kind) {
-      case "type-check":
-        console.log(`   Files: ${stage.files.length}`);
-        console.log(`   Optimized: ${stage.optimized}`);
-        break;
-      case "test-execution":
-        console.log(`   Strategy: ${stage.strategy.mode.kind}`);
-        console.log(`   Fallback: ${stage.strategy.fallbackEnabled}`);
-        if (stage.files && stage.files.length > 0) {
-          console.log(`   Test files: ${stage.files.length}`);
-          stage.files.forEach((file) => console.log(`     - ${file}`));
-        }
-        break;
-      case "jsr-check":
-        console.log(`   Dry run: ${stage.dryRun}`);
-        console.log(`   Allow dirty: ${stage.allowDirty}`);
-        break;
-      case "lint-check":
-        console.log(`   Files: ${stage.files.length}`);
-        break;
-      case "format-check":
-        console.log(`   Check only: ${stage.checkOnly}`);
-        break;
-      case "lockfile-init":
-        console.log(`   Action: ${stage.action}`);
-        break;
+    if (this.mode.kind !== "debug") return;
+
+    const details: Record<string, unknown> = {
+      stage: stage.kind,
+    };
+
+    // Add hierarchy for stages that have it
+    if ("hierarchy" in stage) {
+      details.hierarchy = stage.hierarchy;
     }
+
+    // Add files for stages that have them
+    if ("files" in stage && Array.isArray(stage.files) && stage.files.length > 0) {
+      details.files = stage.files.slice(0, 5); // Show first 5 files
+      if (stage.files.length > 5) {
+        details.additionalFiles = stage.files.length - 5;
+      }
+    }
+
+    this.logDebug("Stage details", details);
   }
 
-  private logSuccess(stageName: string, duration: number, testSummary?: string): void {
-    if (this.mode.kind === "silent" || this.mode.kind === "error-files-only") return;
+  private logSuccess(stageName: string, duration?: number, testSummary?: string): void {
+    const durationStr = duration ? ` (${(duration / 1000).toFixed(2)}s)` : "";
 
-    const durationStr = this.formatDuration(duration);
-    console.log(`${stageName} completed successfully (${durationStr})`);
-
-    // テストサマリー行があれば表示
-    if (testSummary) {
-      console.log(testSummary);
+    switch (this.mode.kind) {
+      case "normal":
+        console.log(`✅ ${stageName} completed${durationStr}`);
+        if (testSummary) {
+          console.log(`   ${testSummary}`);
+        }
+        break;
+      case "debug":
+        if (this.breakdownLogger) {
+          this.breakdownLogger.info(`${stageName} completed${durationStr}`);
+          if (testSummary) {
+            this.breakdownLogger.info(`Test summary: ${testSummary}`);
+          }
+        }
+        break;
+      case "silent":
+      case "error-files-only":
+        // Don't log success in silent modes
+        break;
     }
   }
 
   private logFailure(stageName: string, error: string): void {
-    console.log(`${stageName} failed`);
-
-    if (this.mode.kind !== "error-files-only") {
-      console.log(`   Error: ${error}`);
+    switch (this.mode.kind) {
+      case "normal":
+      case "silent":
+        console.error(`❌ ${stageName} failed`);
+        console.error(`   ${error}`);
+        break;
+      case "debug":
+        if (this.breakdownLogger) {
+          this.breakdownLogger.error(`${stageName} failed: ${error}`);
+        }
+        break;
+      case "error-files-only":
+        console.error(`${stageName}: ${error}`);
+        break;
     }
   }
 
   private logSkipped(stageName: string, reason: string): void {
-    if (this.mode.kind === "silent" || this.mode.kind === "error-files-only") return;
-
-    console.log(`⏭️  ${stageName} skipped: ${reason}`);
-  }
-
-  private extractErrorFiles(error: CIError): string[] {
-    let files: string[] = [];
-
-    switch (error.kind) {
-      case "TypeCheckError":
-      case "TestFailure":
-      case "FormatError":
-      case "LintError":
-        files = error.files;
+    switch (this.mode.kind) {
+      case "normal":
+        console.log(`⏭️  ${stageName} skipped: ${reason}`);
         break;
-      case "JSRError":
-      case "ConfigurationError":
-      case "FileSystemError":
-        return [];
+      case "debug":
+        if (this.breakdownLogger) {
+          this.breakdownLogger.info(`${stageName} skipped: ${reason}`);
+        }
+        break;
+      case "silent":
+      case "error-files-only":
+        // Don't log skipped in silent modes
+        break;
     }
-
-    // 重複を排除してソートする
-    return [...new Set(files)].sort();
-  }
-
-  private formatDuration(ms: number): string {
-    if (ms < 1000) {
-      return `${Math.round(ms)}ms`;
-    } else if (ms < 60000) {
-      return `${(ms / 1000).toFixed(1)}s`;
-    } else {
-      const minutes = Math.floor(ms / 60000);
-      const seconds = Math.floor((ms % 60000) / 1000);
-      return `${minutes}m ${seconds}s`;
-    }
-  }
-}
-
-/**
- * 段階的ログモード作成ヘルパー
- */
-export class LogModeFactory {
-  static normal(): LogMode {
-    return { kind: "normal", showSections: true };
-  }
-
-  static silent(): LogMode {
-    return { kind: "silent", errorsOnly: true };
-  }
-
-  static errorFilesOnly(): LogMode {
-    return { kind: "error-files-only", implicitSilent: true };
-  }
-
-  static debug(
-    breakdownConfig: BreakdownLoggerEnvConfig,
-  ): LogMode {
-    return {
-      kind: "debug",
-      verboseLevel: "high",
-      breakdownLoggerEnv: breakdownConfig,
-    };
   }
 }

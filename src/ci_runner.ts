@@ -25,6 +25,7 @@ import {
   ProgressIndicator,
   Result,
   StageResult,
+  TestFileInfo,
   ValidationError,
 } from "./types.ts";
 
@@ -155,7 +156,10 @@ export class CIRunner {
   }
 
   /**
-   * Execute full CI pipeline
+   * Execute full CI pipeline following the architecture design.
+   *
+   * Uses CIPipelineOrchestrator for stage creation and execution control,
+   * with proper error handling and fallback strategies.
    */
   async run(): Promise<CIExecutionResult> {
     const startTime = performance.now();
@@ -168,113 +172,64 @@ export class CIRunner {
     });
 
     try {
-      // File discovery
-      const filesResult = await this.discoverFiles();
+      // File discovery using infrastructure layer
+      const filesResult = await this.discoverProjectFiles();
       if (!filesResult.ok) {
-        const errorStage: CIStage = {
-          kind: "type-check",
-          files: [],
-          optimized: false,
-          hierarchy: null,
-        };
-        const failureResult: StageResult = {
-          kind: "failure",
-          stage: errorStage,
-          error: filesResult.error.message,
-          shouldStop: true,
-        };
-        completedStages.push(failureResult);
-
-        return {
-          success: false,
+        return this.createFailureResult(
+          startTime,
           completedStages,
-          totalDuration: performance.now() - startTime,
-          errorDetails: {
+          {
             kind: "FileSystemError",
             operation: "file_discovery",
             path: this.projectRoot,
             cause: filesResult.error.message,
           },
-        };
+        );
       }
 
-      const { testFiles, typeCheckFiles } = filesResult.data;
+      const fileInfo = filesResult.data;
 
       // Initialize progress state
-      this.initializeProgress(testFiles, typeCheckFiles);
+      this.initializeProgress(fileInfo);
 
-      // Execute CI stages
-      const stages = this.createStages(testFiles, typeCheckFiles);
+      // Get stages from orchestrator
+      const stages = CIPipelineOrchestrator.getStages(this.config, fileInfo);
 
+      // Execute each stage
       for (const stage of stages) {
-        // ステージ開始時の進捗更新
         this.updateProgress(this.getStageName(stage), this.progressState.processedFiles);
+        this.logger.logStageStart(stage);
 
-        const stageResult = await this.executeStage(stage);
+        const stageResult = await this.executeStageWithFallback(stage);
         completedStages.push(stageResult);
 
-        // Update file statistics after stage execution
-        const filesBeforeUpdate = this.stats.filesProcessed.size;
-        this.updateFileStats(stage);
-        const filesAfterUpdate = this.stats.filesProcessed.size;
-        const uniqueFilesProcessed = filesAfterUpdate - filesBeforeUpdate;
+        this.logger.logStageComplete(stageResult);
 
-        // ステージ完了時の進捗更新
-        const errorCount = stageResult.kind === "failure"
-          ? this.extractErrorCount(stageResult.error)
-          : 0;
+        // Check if execution should stop per orchestrator rules
+        if (CIPipelineOrchestrator.shouldStopExecution(stageResult, this.config)) {
+          if (stageResult.kind === "failure") {
+            const error = ErrorClassificationService.classifyError({
+              success: false,
+              code: 1,
+              stdout: "",
+              stderr: stageResult.error,
+              duration: 0,
+            });
 
-        // updateProgressで直接進捗状態を更新
-        this.updateProgress(
-          this.getStageName(stage),
-          this.progressState.processedFiles + uniqueFilesProcessed,
-          stageResult.kind === "failure"
-            ? this.progressState.errorFiles + uniqueFilesProcessed
-            : this.progressState.errorFiles,
-          undefined,
-          undefined,
-          stageResult.kind === "failure"
-            ? this.progressState.totalErrorCount + errorCount
-            : this.progressState.totalErrorCount,
-        );
-
-        if (stageResult.kind === "failure") {
-          const error = ErrorClassificationService.classifyError({
-            success: false,
-            code: 1,
-            stdout: "",
-            stderr: stageResult.error,
-            duration: 0,
-          });
-
-          this.logger.logErrorFiles(error);
-
-          // Show final failure summary with progress information
-          const totalDuration = performance.now() - startTime;
-          const finalProgressState: ProgressIndicator = {
-            currentStage: `${this.getStageName(stage)} Failed`,
-            processedFiles: this.progressState.processedFiles,
-            totalFiles: this.progressState.totalFiles,
-            errorFiles: this.progressState.errorFiles,
-            totalErrorCount: this.progressState.totalErrorCount,
-            isFallback: this.progressState.isFallback,
-            fallbackMessage: this.progressState.isFallback
-              ? "CI finished with errors - showing progress summary"
-              : undefined,
-          };
-
-          this.logger.logProgress(finalProgressState);
-
-          return {
-            success: false,
-            completedStages,
-            totalDuration: totalDuration,
-            errorDetails: error,
-            progressState: finalProgressState,
-          };
+            return this.createFailureResult(
+              startTime,
+              completedStages,
+              error,
+            );
+          }
+          break; // Stop execution as directed by orchestrator
         }
+
+        // Update progress after successful stage
+        this.updateProgressAfterStage(stage, stageResult);
       }
 
+      // All stages completed successfully
       const totalDuration = performance.now() - startTime;
       const summaryStats = this.generateSummaryStats(completedStages, totalDuration);
 
@@ -326,76 +281,191 @@ export class CIRunner {
 
   // === Private Methods ===
 
-  private async discoverFiles(): Promise<
-    Result<{
-      testFiles: string[];
-      typeCheckFiles: string[];
-    }, ValidationError & { message: string }>
+  /**
+   * Discover project files using infrastructure layer.
+   */
+  private async discoverProjectFiles(): Promise<
+    Result<TestFileInfo, ValidationError & { message: string }>
   > {
-    // If hierarchy is specified, target only that hierarchy
-    const targetDirectory = this.config.hierarchy ? this.config.hierarchy : this.projectRoot;
-
-    const testFilesResult = await ProjectFileDiscovery.findTestFiles(targetDirectory);
-    if (!testFilesResult.ok) return testFilesResult;
-
-    const typeCheckFilesResult = await ProjectFileDiscovery.findTypeScriptFiles(
-      targetDirectory,
-      false,
+    return await ProjectFileDiscovery.discoverProjectFiles(
+      this.projectRoot,
+      this.config.hierarchy,
     );
-    if (!typeCheckFilesResult.ok) return typeCheckFilesResult;
+  }
+
+  /**
+   * Create failure result with proper error information.
+   */
+  private createFailureResult(
+    startTime: number,
+    completedStages: StageResult[],
+    error: CIError,
+  ): CIExecutionResult {
+    const totalDuration = performance.now() - startTime;
+
+    this.logger.logError("CI execution failed", error);
+
+    const finalProgressState: ProgressIndicator = {
+      currentStage: "Failed",
+      processedFiles: this.progressState.processedFiles,
+      totalFiles: this.progressState.totalFiles,
+      errorFiles: this.progressState.errorFiles,
+      totalErrorCount: this.progressState.totalErrorCount,
+      isFallback: this.progressState.isFallback,
+      fallbackMessage: this.progressState.isFallback
+        ? "CI finished with errors after fallback attempts"
+        : undefined,
+    };
+
+    this.logger.logProgress(finalProgressState);
 
     return {
-      ok: true,
-      data: {
-        testFiles: testFilesResult.data,
-        typeCheckFiles: typeCheckFilesResult.data,
-      },
+      success: false,
+      completedStages,
+      totalDuration,
+      errorDetails: error,
+      progressState: finalProgressState,
     };
   }
 
-  private createStages(testFiles: string[], typeCheckFiles: string[]): CIStage[] {
-    const stages: CIStage[] = [];
-    const hierarchy = this.config.hierarchy;
+  /**
+   * Execute a stage with fallback support per architecture design.
+   */
+  private async executeStageWithFallback(stage: CIStage): Promise<StageResult> {
+    try {
+      const result = await this.executeStage(stage);
 
-    // Type Check stage
-    stages.push(
-      CIPipelineOrchestrator.createStage("type-check", typeCheckFiles, undefined, hierarchy),
-    );
+      // If successful, return immediately
+      if (result.kind === "success") {
+        return result;
+      }
 
-    // JSR Check stage - skip when hierarchy is specified
-    if (!hierarchy) {
-      stages.push(CIPipelineOrchestrator.createStage("jsr-check", [], undefined, hierarchy));
-    } else {
-      this.logger.logDebug("JSR Check skipped due to hierarchy specification", { hierarchy });
+      // If failed, check for fallback possibility
+      if (result.kind === "failure") {
+        const error = ErrorClassificationService.classifyError({
+          success: false,
+          code: 1,
+          stdout: "",
+          stderr: result.error,
+          duration: 0,
+        });
+
+        // Check if fallback should be attempted
+        if (StageInternalFallbackService.shouldRetryWithFallback(error, stage)) {
+          this.logger.logInfo(`Attempting fallback for stage: ${stage.kind}`);
+          return await this.attemptFallback(stage, error);
+        }
+      }
+
+      return result;
+    } catch (error) {
+      return {
+        kind: "failure",
+        stage,
+        error: error instanceof Error ? error.message : String(error),
+        shouldStop: true,
+      };
     }
-
-    // Test execution stage
-    const strategyResult = ExecutionStrategyService.determineStrategy(this.config);
-    if (strategyResult.ok && testFiles.length > 0) {
-      // Allモードの場合は空のファイルリストを渡す（全体実行）
-      const stageFiles = strategyResult.data.mode.kind === "all" ? [] : testFiles;
-      stages.push(
-        CIPipelineOrchestrator.createStage(
-          "test-execution",
-          stageFiles,
-          strategyResult.data,
-          hierarchy,
-        ),
-      );
-    }
-
-    // Lint stage
-    stages.push(
-      CIPipelineOrchestrator.createStage("lint-check", typeCheckFiles, undefined, hierarchy),
-    );
-
-    // Format stage
-    stages.push(
-      CIPipelineOrchestrator.createStage("format-check", typeCheckFiles, undefined, hierarchy),
-    );
-
-    return stages;
   }
+
+  /**
+   * Attempt fallback execution for a failed stage.
+   */
+  private async attemptFallback(stage: CIStage, error: CIError): Promise<StageResult> {
+    // For test-execution stages, attempt strategy fallback
+    if (stage.kind === "test-execution") {
+      const currentStrategy = stage.strategy;
+      const fallbackResult = StageInternalFallbackService.createFallbackStrategy(
+        currentStrategy,
+      );
+
+      if (fallbackResult.ok) {
+        const fallbackStage: CIStage = {
+          ...stage,
+          strategy: fallbackResult.data,
+        };
+
+        this.progressState.isFallback = true;
+        this.progressState.fallbackMessage = `Retrying with ${fallbackResult.data.mode.kind} mode`;
+
+        return await this.executeStage(fallbackStage);
+      }
+    }
+
+    // If no fallback available, return failure
+    return {
+      kind: "failure",
+      stage,
+      error: `Fallback failed: ${JSON.stringify(error)}`,
+      shouldStop: true,
+    };
+  }
+
+  /**
+   * Initialize progress tracking with discovered file information.
+   */
+  private initializeProgress(fileInfo: TestFileInfo): void {
+    const totalFiles = Math.max(
+      fileInfo.testFiles.length,
+      fileInfo.typeCheckFiles.length,
+      fileInfo.allFiles.length,
+    );
+
+    this.progressState = {
+      totalFiles,
+      processedFiles: 0,
+      errorFiles: 0,
+      totalErrorCount: 0,
+      currentStage: "Initializing",
+      isFallback: false,
+    };
+  }
+
+  /**
+   * Update progress after stage completion.
+   */
+  private updateProgressAfterStage(stage: CIStage, result: StageResult): void {
+    const stageFiles = this.getStageFileCount(stage);
+
+    this.progressState.processedFiles += stageFiles;
+
+    if (result.kind === "failure") {
+      this.progressState.errorFiles += stageFiles;
+      this.progressState.totalErrorCount += this.extractErrorCount(result.error);
+    }
+
+    this.updateProgress(
+      this.getStageName(stage),
+      this.progressState.processedFiles,
+      this.progressState.errorFiles,
+      undefined,
+      undefined,
+      this.progressState.totalErrorCount,
+    );
+  }
+
+  /**
+   * Get the number of files processed by a stage.
+   */
+  private getStageFileCount(stage: CIStage): number {
+    switch (stage.kind) {
+      case "lockfile-init":
+        return 1; // One lockfile operation
+      case "type-check":
+      case "lint-check":
+        return stage.files.length;
+      case "format-check":
+        return 1; // Format check operates on all files
+      case "test-execution":
+        return stage.files.length || 1; // At least 1 for "all" mode
+      case "jsr-check":
+        return 1; // One JSR check operation
+    }
+  }
+
+  /**
+   * Extract error count from error message.
+   */
 
   private async executeStage(stage: CIStage): Promise<StageResult> {
     const startTime = performance.now();
@@ -427,7 +497,7 @@ export class CIRunner {
         shouldStop: true,
       };
 
-      this.logger.logStageResult(result);
+      this.logger.logStageComplete(result);
       return result;
     }
   }
@@ -446,7 +516,7 @@ export class CIRunner {
         error: strategyResult.error.message || "Strategy determination failed",
         shouldStop: true,
       };
-      this.logger.logStageResult(failureResult);
+      this.logger.logStageComplete(failureResult);
       return failureResult;
     }
 
@@ -460,7 +530,7 @@ export class CIRunner {
         stage,
         duration,
       };
-      this.logger.logStageResult(successResult);
+      this.logger.logStageComplete(successResult);
       return successResult;
     } else {
       const errorOutput = result.ok
@@ -491,7 +561,7 @@ export class CIRunner {
         error: errorOutput,
         shouldStop: true,
       };
-      this.logger.logStageResult(failureResult);
+      this.logger.logStageComplete(failureResult);
       return failureResult;
     }
   }
@@ -515,7 +585,7 @@ export class CIRunner {
         stage,
         duration,
       };
-      this.logger.logStageResult(successResult);
+      this.logger.logStageComplete(successResult);
       return successResult;
     } else {
       const errorOutput = result.ok ? result.data.stderr : result.error.message;
@@ -525,7 +595,7 @@ export class CIRunner {
         error: errorOutput,
         shouldStop: true,
       };
-      this.logger.logStageResult(failureResult);
+      this.logger.logStageComplete(failureResult);
       return failureResult;
     }
   }
@@ -545,7 +615,7 @@ export class CIRunner {
         error: testFilesResult.error.message,
         shouldStop: true,
       };
-      this.logger.logStageResult(failureResult);
+      this.logger.logStageComplete(failureResult);
       return failureResult;
     }
 
@@ -556,7 +626,7 @@ export class CIRunner {
         stage,
         reason: `No test files found in ${targetDirectory}`,
       };
-      this.logger.logStageResult(skippedResult);
+      this.logger.logStageComplete(skippedResult);
       return skippedResult;
     }
 
@@ -579,7 +649,7 @@ export class CIRunner {
         duration,
         testSummary,
       };
-      this.logger.logStageResult(successResult);
+      this.logger.logStageComplete(successResult);
       return successResult;
     } else {
       const errorOutput = result.ok ? result.data.stderr : result.error.message;
@@ -607,7 +677,7 @@ export class CIRunner {
             stage,
             duration,
           };
-          this.logger.logStageResult(successResult);
+          this.logger.logStageComplete(successResult);
           return successResult;
         } else {
           // フォールバック失敗時：詳細なエラー情報を生成
@@ -627,7 +697,7 @@ export class CIRunner {
           );
 
           // エラーファイル詳細をログに出力
-          this.logger.logErrorFiles(classifiedError);
+          this.logger.logError("Fallback execution failed", classifiedError);
 
           // Show fallback failure progress
           const fallbackErrorCount = this.extractErrorCount(fallbackErrorOutput);
@@ -652,7 +722,7 @@ export class CIRunner {
         error: errorOutput,
         shouldStop: true,
       };
-      this.logger.logStageResult(failureResult);
+      this.logger.logStageComplete(failureResult);
       return failureResult;
     }
   }
@@ -699,10 +769,8 @@ export class CIRunner {
 
               if (fallbackStrategyResult.ok) {
                 const fallbackStrategy = fallbackStrategyResult.data;
-                this.logger.logFallback(
-                  strategy.mode.kind,
-                  fallbackStrategy.mode.kind,
-                  result.ok ? result.data.stderr : result.error.message,
+                this.logger.logInfo(
+                  `Switching fallback strategy: ${strategy.mode.kind} → ${fallbackStrategy.mode.kind}`,
                 );
 
                 // フォールバック時の進捗指標更新
@@ -849,11 +917,10 @@ export class CIRunner {
     }
 
     const fallbackStrategy = fallbackStrategyResult.data;
-    this.logger.logFallback(
-      currentStrategy.mode.kind,
-      fallbackStrategy.mode.kind,
-      originalError,
+    this.logger.logInfo(
+      `Test fallback strategy activated: ${currentStrategy.mode.kind} → ${fallbackStrategy.mode.kind}`,
     );
+    this.logger.logError("Original test error", originalError);
 
     // フォールバック時の進捗指標更新
     this.updateProgress(
@@ -889,7 +956,7 @@ export class CIRunner {
         error: strategyResult.error.message,
         shouldStop: true,
       };
-      this.logger.logStageResult(failureResult);
+      this.logger.logStageComplete(failureResult);
       return failureResult;
     }
 
@@ -903,7 +970,7 @@ export class CIRunner {
         stage,
         duration,
       };
-      this.logger.logStageResult(successResult);
+      this.logger.logStageComplete(successResult);
       return successResult;
     } else {
       const errorOutput = result.ok ? result.data.stderr : result.error.message;
@@ -925,7 +992,7 @@ export class CIRunner {
         error: errorOutput,
         shouldStop: true,
       };
-      this.logger.logStageResult(failureResult);
+      this.logger.logStageComplete(failureResult);
       return failureResult;
     }
   }
@@ -947,7 +1014,7 @@ export class CIRunner {
         error: typeCheckFilesResult.error.message,
         shouldStop: true,
       };
-      this.logger.logStageResult(failureResult);
+      this.logger.logStageComplete(failureResult);
       return failureResult;
     }
 
@@ -960,7 +1027,7 @@ export class CIRunner {
         error: strategyResult.error.message,
         shouldStop: true,
       };
-      this.logger.logStageResult(failureResult);
+      this.logger.logStageComplete(failureResult);
       return failureResult;
     }
 
@@ -976,7 +1043,7 @@ export class CIRunner {
         stage,
         duration,
       };
-      this.logger.logStageResult(successResult);
+      this.logger.logStageComplete(successResult);
       return successResult;
     } else {
       const errorOutput = result.ok ? result.data.stderr : result.error.message;
@@ -999,7 +1066,7 @@ export class CIRunner {
         error: errorOutput,
         shouldStop: true,
       };
-      this.logger.logStageResult(failureResult);
+      this.logger.logStageComplete(failureResult);
       return failureResult;
     }
   }
@@ -1018,7 +1085,7 @@ export class CIRunner {
         stage,
         duration,
       };
-      this.logger.logStageResult(successResult);
+      this.logger.logStageComplete(successResult);
       return successResult;
     } else {
       const errorOutput = result.ok ? result.data.stderr : result.error.message;
@@ -1028,7 +1095,7 @@ export class CIRunner {
         error: errorOutput,
         shouldStop: true,
       };
-      this.logger.logStageResult(failureResult);
+      this.logger.logStageComplete(failureResult);
       return failureResult;
     }
   }
@@ -1088,11 +1155,10 @@ export class CIRunner {
     }
 
     const fallbackStrategy = fallbackStrategyResult.data;
-    this.logger.logFallback(
-      currentStrategy.mode.kind,
-      fallbackStrategy.mode.kind,
-      originalError,
+    this.logger.logInfo(
+      `Type check fallback strategy activated: ${currentStrategy.mode.kind} → ${fallbackStrategy.mode.kind}`,
     );
+    this.logger.logError("Original type check error", originalError);
 
     // フォールバック時の進捗指標更新
     this.updateProgress(
@@ -1168,11 +1234,10 @@ export class CIRunner {
     }
 
     const fallbackStrategy = fallbackStrategyResult.data;
-    this.logger.logFallback(
-      currentStrategy.mode.kind,
-      fallbackStrategy.mode.kind,
-      originalError,
+    this.logger.logInfo(
+      `Lint fallback strategy activated: ${currentStrategy.mode.kind} → ${fallbackStrategy.mode.kind}`,
     );
+    this.logger.logError("Original lint error", originalError);
 
     // 対象ファイルを決定: 失敗したバッチ範囲のみか全ファイルか
     const targetFiles = StageInternalFallbackService.extractTargetFiles(
@@ -1239,38 +1304,15 @@ export class CIRunner {
     }
 
     const fallbackStrategy = fallbackStrategyResult.data;
-    this.logger.logFallback(
-      currentStrategy.mode.kind,
-      fallbackStrategy.mode.kind,
-      originalError,
+    this.logger.logInfo(
+      `Format fallback strategy activated: ${currentStrategy.mode.kind} → ${fallbackStrategy.mode.kind}`,
     );
+    this.logger.logError("Original format error", originalError);
 
     return await this.executeFormatWithStrategy(fallbackStrategy, files, options);
   }
 
   // === 統計情報収集メソッド ===
-
-  /**
-   * ステージ実行時にファイル統計を更新
-   */
-  private updateFileStats(stage: CIStage): void {
-    switch (stage.kind) {
-      case "type-check":
-        stage.files.forEach((file) => this.stats.filesProcessed.add(file));
-        break;
-      case "lint-check":
-        stage.files.forEach((file) => this.stats.filesProcessed.add(file));
-        break;
-      case "test-execution":
-        // テストファイルは実行結果で更新
-        break;
-      case "format-check":
-      case "jsr-check":
-      case "lockfile-init":
-        // これらはファイル数に含めない
-        break;
-    }
-  }
 
   /**
    * テスト実行結果から統計を更新（実際のテスト結果解析）
@@ -1438,21 +1480,6 @@ export class CIRunner {
 
     // フォールバック: 1つのエラーと仮定
     return 1;
-  }
-
-  /**
-   * 進捗状態を初期化
-   */
-  private initializeProgress(testFiles: string[], typeCheckFiles: string[]): void {
-    // 重複を除いた総ファイル数を計算
-    const allFiles = new Set([...testFiles, ...typeCheckFiles]);
-    this.progressState.totalFiles = allFiles.size;
-    this.progressState.processedFiles = 0;
-    this.progressState.errorFiles = 0;
-    this.progressState.totalErrorCount = 0;
-    this.progressState.currentStage = "Starting";
-    this.progressState.isFallback = false;
-    this.progressState.fallbackMessage = undefined;
   }
 
   /**

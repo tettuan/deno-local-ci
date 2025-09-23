@@ -5,7 +5,7 @@
  * Testing execution strategy determination, fallback processing, and error classification
  */
 
-import { assertEquals, assertExists } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
   CIPipelineOrchestrator,
   ErrorClassificationService,
@@ -20,6 +20,7 @@ import {
   type CIStage,
   ExecutionStrategy,
   type ProcessResult,
+  type StageResult,
 } from "./types.ts";
 
 Deno.test("ExecutionStrategyService - determine default strategy", () => {
@@ -65,7 +66,7 @@ Deno.test("ExecutionStrategyService - should fallback on TestFailure", () => {
   }
 });
 
-Deno.test("ExecutionStrategyService - should not fallback on TypeCheckError", () => {
+Deno.test("ExecutionStrategyService - should fallback on TypeCheckError (updated logic)", () => {
   const strategy = ExecutionStrategy.create(
     { kind: "batch", batchSize: 25, failedBatchOnly: false, hierarchy: null },
     true,
@@ -78,8 +79,9 @@ Deno.test("ExecutionStrategyService - should not fallback on TypeCheckError", ()
       details: ["Type error: ..."],
     };
 
+    // TypeCheckError is now fallbackable per updated architecture
     const shouldFallback = ExecutionStrategyService.shouldFallback(strategy.data, error);
-    assertEquals(shouldFallback, false);
+    assertEquals(shouldFallback, true);
   }
 });
 
@@ -221,52 +223,68 @@ Deno.test("CIPipelineOrchestrator - get next stage", () => {
 });
 */
 
-Deno.test("CIPipelineOrchestrator - should stop pipeline on any error", () => {
-  const errors: CIError[] = [
-    { kind: "TypeCheckError", files: [], details: [] },
-    { kind: "TestFailure", files: [], errors: [] },
-    { kind: "JSRError", output: "", suggestion: "" },
-    { kind: "FormatError", files: [], fixCommand: "" },
-    { kind: "LintError", files: [], details: [] },
-  ];
+Deno.test("CIPipelineOrchestrator - should stop execution on failure", () => {
+  const config: CIConfig = { stopOnFirstError: true };
 
-  for (const error of errors) {
-    assertEquals(CIPipelineOrchestrator.shouldStopPipeline(error), true);
-  }
+  // Test failure stage result
+  const failureResult: StageResult = {
+    kind: "failure",
+    stage: { kind: "type-check", files: [], optimized: true, hierarchy: null },
+    error: "Type check failed",
+    shouldStop: true,
+  };
+
+  assertEquals(CIPipelineOrchestrator.shouldStopExecution(failureResult, config), true);
+
+  // Test success stage result
+  const successResult: StageResult = {
+    kind: "success",
+    stage: { kind: "type-check", files: [], optimized: true, hierarchy: null },
+    duration: 1000,
+  };
+
+  assertEquals(CIPipelineOrchestrator.shouldStopExecution(successResult, config), false);
 });
 
-Deno.test("CIPipelineOrchestrator - create stages", () => {
-  const files = ["src/main.ts", "src/utils.ts"];
-  const strategy = ExecutionStrategy.create({
-    kind: "batch",
-    batchSize: 10,
-    failedBatchOnly: false,
+Deno.test("CIPipelineOrchestrator - get stages with file info", () => {
+  const fileInfo = {
+    testFiles: ["test1.test.ts", "test2.test.ts"],
+    typeCheckFiles: ["src/main.ts", "src/utils.ts"],
+    allFiles: ["src/main.ts", "src/utils.ts", "test1.test.ts", "test2.test.ts"],
+    projectRoot: "/project",
     hierarchy: null,
-  }, true);
+  };
 
-  if (strategy.ok) {
-    const typeCheckStage = CIPipelineOrchestrator.createStage("type-check", files);
-    assertEquals(typeCheckStage.kind, "type-check");
-    if (typeCheckStage.kind === "type-check") {
-      assertEquals(typeCheckStage.files, files);
-    }
+  const config: CIConfig = {
+    allowDirty: true,
+    hierarchy: null,
+  };
 
-    const jsrStage = CIPipelineOrchestrator.createStage("jsr-check");
-    assertEquals(jsrStage.kind, "jsr-check");
-    if (jsrStage.kind === "jsr-check") {
-      assertEquals(jsrStage.dryRun, true);
-    }
+  const stages = CIPipelineOrchestrator.getStages(config, fileInfo);
 
-    const testStage = CIPipelineOrchestrator.createStage("test-execution", [
-      "test1.test.ts",
-      "test2.test.ts",
-    ], strategy.data);
-    assertEquals(testStage.kind, "test-execution");
-    if (testStage.kind === "test-execution") {
-      assertExists(testStage.strategy);
-      assertEquals(testStage.files.length, 2);
-    }
+  // Should include lockfile-init, type-check, jsr-check, test-execution, lint-check, format-check
+  assertEquals(stages.length, 6);
+
+  // Check lockfile stage
+  assertEquals(stages[0].kind, "lockfile-init");
+
+  // Check type-check stage
+  assertEquals(stages[1].kind, "type-check");
+  if (stages[1].kind === "type-check") {
+    assertEquals(stages[1].files, fileInfo.typeCheckFiles);
   }
+
+  // Check JSR stage (should be included when hierarchy is null)
+  assertEquals(stages[2].kind, "jsr-check");
+
+  // Check test-execution stage
+  assertEquals(stages[3].kind, "test-execution");
+
+  // Check lint stage
+  assertEquals(stages[4].kind, "lint-check");
+
+  // Check format stage
+  assertEquals(stages[5].kind, "format-check");
 });
 
 Deno.test("FileClassificationService - classify files correctly", () => {

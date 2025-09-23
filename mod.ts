@@ -94,7 +94,7 @@
  *   if (configResult.ok) {
  *     const config = configResult.data;
  *     const logMode = config.logMode || LogModeFactory.normal();
- *     const loggerResult = CILogger.create(logMode, config.breakdownLoggerConfig);
+ *     const loggerResult = CILogger.create(logMode);
  *
  *     if (loggerResult.ok) {
  *       const logger = loggerResult.data;
@@ -230,7 +230,11 @@ export async function main(args: string[]): Promise<void> {
           console.error("❌ BreakdownLogger configuration is missing for debug mode");
           Deno.exit(1);
         }
-        logMode = LogModeFactory.debug(config.breakdownLoggerConfig);
+        logMode = LogModeFactory.debug(
+          "high",
+          config.breakdownLoggerConfig.logLength,
+          config.breakdownLoggerConfig.logKey,
+        );
         break;
       case "error-files-only":
         logMode = LogModeFactory.errorFilesOnly();
@@ -240,7 +244,7 @@ export async function main(args: string[]): Promise<void> {
         break;
     }
 
-    const loggerResult = CILogger.create(logMode, config.breakdownLoggerConfig);
+    const loggerResult = CILogger.create(logMode);
     if (!loggerResult.ok) {
       console.error("❌ Logger creation failed:", loggerResult.error.message);
       Deno.exit(1);

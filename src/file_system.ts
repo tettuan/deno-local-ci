@@ -6,7 +6,8 @@
  */
 
 import { basename, dirname, join, relative, resolve } from "@std/path";
-import { createError, Result, ValidationError } from "./types.ts";
+import { createError, Result, TestFileInfo, ValidationError } from "./types.ts";
+import { FileClassificationService } from "./domain_services.ts";
 
 /**
  * ファイルシステム操作サービス
@@ -156,6 +157,107 @@ export class ProjectFileDiscovery {
         cause: "No deno.json or deno.jsonc found",
       }, `Project root not found starting from: ${startPath}`),
     };
+  }
+
+  /**
+   * Discover and categorize project files according to architecture design.
+   *
+   * Returns TestFileInfo containing all categorized files for CI processing.
+   *
+   * @param root - Project root directory
+   * @param hierarchy - Optional hierarchy restriction (null = project-wide)
+   * @returns TestFileInfo with categorized file arrays
+   */
+  static async discoverProjectFiles(
+    root: string,
+    hierarchy?: string | null,
+  ): Promise<Result<TestFileInfo, ValidationError & { message: string }>> {
+    try {
+      const targetDirectory = hierarchy ? join(root, hierarchy) : root;
+
+      // Check if target directory exists
+      if (!(await FileSystemService.directoryExists(targetDirectory))) {
+        return {
+          ok: false,
+          error: createError({
+            kind: "FileSystemError",
+            operation: "discoverProjectFiles",
+            path: targetDirectory,
+            cause: "Target directory does not exist",
+          }, `Directory not found: ${targetDirectory}`),
+        };
+      }
+
+      // Find all relevant files
+      const allFilesResult = await this.findAllFiles(targetDirectory);
+      if (!allFilesResult.ok) {
+        return allFilesResult;
+      }
+
+      // Classify files using domain service
+      const classified = FileClassificationService.classifyFiles(allFilesResult.data);
+
+      const fileInfo: TestFileInfo = {
+        testFiles: classified.testFiles,
+        typeCheckFiles: classified.typeCheckFiles,
+        allFiles: allFilesResult.data,
+        projectRoot: root,
+        hierarchy: hierarchy || null,
+      };
+
+      return { ok: true, data: fileInfo };
+    } catch (error) {
+      return {
+        ok: false,
+        error: createError({
+          kind: "FileSystemError",
+          operation: "discoverProjectFiles",
+          path: hierarchy ? join(root, hierarchy) : root,
+          cause: error instanceof Error ? error.message : String(error),
+        }, `Failed to discover project files`),
+      };
+    }
+  }
+
+  /**
+   * Find all relevant files in the target directory.
+   */
+  private static async findAllFiles(
+    targetDirectory: string,
+  ): Promise<Result<string[], ValidationError & { message: string }>> {
+    const patterns = [
+      "**/*.ts",
+      "**/*.tsx",
+      "**/*.d.ts",
+      "**/deno.json",
+      "**/deno.lock",
+      "**/import_map.json",
+    ];
+
+    try {
+      const allFiles: string[] = [];
+
+      for (const pattern of patterns) {
+        const foundFiles = await this.globFiles(targetDirectory, pattern);
+        if (foundFiles.ok) {
+          allFiles.push(...foundFiles.data);
+        }
+      }
+
+      // Remove duplicates and sort
+      const uniqueFiles = [...new Set(allFiles)].sort();
+      return { ok: true, data: uniqueFiles };
+    } catch (error) {
+      return {
+        ok: false,
+        error: createError({
+          kind: "FileSystemError",
+          operation: "findAllFiles",
+          path: targetDirectory,
+          cause: error instanceof Error ? error.message : String(error),
+        }, `Failed to find files in: ${targetDirectory}`),
+      };
+    }
   }
 
   /**
