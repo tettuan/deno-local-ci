@@ -13,7 +13,8 @@
  * @module
  */
 
-import { createError, Result, ValidationError } from "./types.ts";
+import { createError } from "./types.ts";
+import type { Result, ValidationError } from "./types.ts";
 
 // === Branded Types for Type-Level Constraints ===
 

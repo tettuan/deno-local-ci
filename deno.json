@@ -16,6 +16,7 @@
     "url": "https://github.com/tettuan"
   },
   "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0",
     "@std/path": "jsr:@std/path@^1.1.1",
     "@tettuan/breakdownlogger": "jsr:@tettuan/breakdownlogger@^1.0.8"
   },
@@ -74,6 +75,7 @@
   },
   "fmt": {
     "include": ["src/", "*.ts", "*.md"],
+    "exclude": ["tests/error_tests/"],
     "useTabs": false,
     "lineWidth": 100,
     "indentWidth": 2,
@@ -102,8 +104,6 @@
         "no-sync-fn-in-async-fn",
         "no-throw-literal",
         "no-undef",
-        "prefer-ascii",
-        "prefer-primordials",
         "single-var-declarator",
         "verbatim-module-syntax"
       ],

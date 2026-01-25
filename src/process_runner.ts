@@ -5,7 +5,8 @@
  * 型安全なプロセス実行とエラーハンドリング
  */
 
-import { createError, ProcessResult, Result, TestStats, ValidationError } from "./types.ts";
+import { createError } from "./types.ts";
+import type { ProcessResult, Result, TestStats, ValidationError } from "./types.ts";
 
 /**
  * テスト出力からサマリー行を抽出（シンプル版）

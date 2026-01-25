@@ -221,6 +221,11 @@ export type ProcessResultWithBatch = ProcessResult & {
   failedBatch?: FailedBatchInfo;
 };
 
+// === Result with batch info (for strategy execution functions) ===
+export type ResultWithBatch<T, E> = Result<T, E> & {
+  failedBatch?: FailedBatchInfo;
+};
+
 // === CI設定 ===
 export type CIConfig = {
   mode?: ExecutionMode;
@@ -466,4 +471,77 @@ export interface CISummaryStats {
     longestStage: string;
     longestStageDuration: number;
   };
+}
+
+// === History Store Types (per system.md Section 5) ===
+
+/**
+ * Individual stage execution record for history tracking.
+ * Captures detailed information about each stage's execution.
+ */
+export interface StageExecutionRecord {
+  /** Stage identifier */
+  stage: string;
+  /** Execution result status */
+  status: "success" | "failure" | "skipped";
+  /** Duration in milliseconds */
+  duration: number;
+  /** Strategy used (for test stage) */
+  strategy?: string;
+  /** Fallback information if applicable */
+  fallback?: {
+    from: string;
+    to: string;
+  };
+  /** Error details if failed */
+  error?: {
+    kind: string;
+    files?: string[];
+    message?: string;
+  };
+  /** Test summary if applicable */
+  testSummary?: string;
+}
+
+/**
+ * Complete execution record for a single CI run.
+ * Stored in .ci-local/history.json per system.md architecture.
+ */
+export interface ExecutionRecord {
+  /** Unique execution identifier */
+  id: string;
+  /** ISO timestamp of execution start */
+  timestamp: string;
+  /** Overall result */
+  success: boolean;
+  /** Total execution duration in milliseconds */
+  totalDuration: number;
+  /** Per-stage execution records */
+  stages: StageExecutionRecord[];
+  /** Configuration used for this run */
+  config: {
+    mode: string;
+    hierarchy: string | null;
+    fallbackEnabled: boolean;
+    batchSize?: number;
+  };
+  /** Failed batch info if applicable */
+  failedBatchInfo?: FailedBatchInfo;
+  /** Git information if available */
+  git?: {
+    branch?: string;
+    commit?: string;
+  };
+}
+
+/**
+ * History file structure for .ci-local/history.json
+ */
+export interface HistoryFile {
+  /** Schema version for future compatibility */
+  version: 1;
+  /** List of execution records (newest first) */
+  executions: ExecutionRecord[];
+  /** Maximum number of records to keep */
+  maxRecords: number;
 }

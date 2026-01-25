@@ -1,6 +1,6 @@
 # Local CI Architecture
 
-Local CIは「単純さがつくる機能美」と「段階的な完全性」を目的に設計される。Type → JSR → Test → Lint → Format を厳密な順序で実行し、失敗時は常に最小粒度 (single-file) まで切り詰めて one by one 修正を促す。
+Local CIは「単純さがつくる機能美」と「段階的な完全性」を目的に設計される。Lockfile Init → Type → JSR → Test → Lint → Format を厳密な順序で実行し、失敗時は常に最小粒度 (single-file) まで切り詰めて one by one 修正を促す。
 
 ## 1. Pipeline Flow
 ```mermaid
@@ -9,11 +9,13 @@ flowchart LR
     Parse --> Config[CIConfig Builder]
     Config --> Logger[CILogger]
     Logger --> Runner[CIRunner]
-    Runner --> Stage1[Type Check]
+    Runner --> Stage0[Lockfile Init]
+    Stage0 -->|success| Stage1[Type Check]
     Stage1 -->|success| Stage2[JSR Dry Run]
     Stage2 -->|success| Stage3[Test Execution]
     Stage3 -->|success| Stage4[Lint]
     Stage4 -->|success| Stage5[Format]
+    Stage0 -.failure .-> Halt0([Stop])
     Stage1 -.failure .-> Halt1([Stop])
     Stage2 -.failure .-> Halt2([Stop])
     Stage3 -.failure .-> Halt3([Stop])
@@ -22,6 +24,7 @@ flowchart LR
     Stage5 --> Complete([Report Success])
 ```
 - 各 Stage は完全に独立し、成功時のみ次 Stage へ遷移する。
+- Lockfile Init は依存関係の解決と deno.lock の再生成を行い、後続ステージの安定性を保証する。
 - 階層指定時は Type/Test/Lint/Format だけが対象となり、JSR は `skip` で即時完了扱いにする。
 
 ## 2. Execution & Fallback
@@ -72,8 +75,9 @@ flowchart TB
 - Domain 層が Result 型や ExecutionStrategy を提供し、総状態を型で拘束する。
 
 ## 4. Stage Contract
-| Stage | 查対象 | 成功条件 | 失敗時の記録 |
+| Stage | 対象 | 成功条件 | 失敗時の記録 |
 | ----- | ------ | -------- | ------------ |
+| Lockfile Init | deno.lock | `deno cache` exit code 0 | `FileSystemError` |
 | Type Check | TypeScript ファイル (hierarchy 適用) | `deno check` exit code 0 | `TypeCheckError` と失敗ファイル集 |
 | JSR Dry Run | プロジェクト全体 *(hierarchy時 skip)* | `deno publish --dry-run` 成功 | `JSRError` (fatal) |
 | Test | 対象テストファイル | Strategy success (all/batch/single) | `TestFailure` + `FailedBatchInfo` |

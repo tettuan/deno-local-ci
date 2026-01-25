@@ -134,6 +134,7 @@ test-temp/
 # CI実行時の一時データ
 ci-temp/
 .ci-temp/
+.ci-local/
 
 # パフォーマンステスト結果
 perf-results/

@@ -5,10 +5,10 @@
  * Verification of each log mode and BreakdownLogger integration
  */
 
-import { assertEquals, assertExists } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals, assertExists } from "@std/assert";
 import { CILogger, LogModeFactory } from "./logger.ts";
 
-import { type CIError, type CIStage, type StageResult } from "./types.ts";
+import type { CIError, CIStage, StageResult } from "./types.ts";
 
 Deno.test("LogModeFactory - create normal mode", () => {
   const mode = LogModeFactory.normal();

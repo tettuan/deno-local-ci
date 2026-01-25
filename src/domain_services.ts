@@ -14,13 +14,12 @@
  * @module
  */
 
-import {
+import { createError, ExecutionStrategy } from "./types.ts";
+import type {
   CIConfig,
   CIError,
   CIStage,
-  createError,
   ExecutionMode,
-  ExecutionStrategy,
   ProcessResult,
   Result,
   StageResult,

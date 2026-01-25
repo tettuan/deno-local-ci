@@ -13,7 +13,7 @@
  * @module
  */
 
-import { CIError, CIStage, ExecutionStrategy, Result, StageResult } from "./types.ts";
+import type { CIError, CIStage, ExecutionStrategy, Result, StageResult } from "./types.ts";
 
 // === Domain Event Types ===
 
@@ -164,9 +164,11 @@ export class CIEventBus {
     eventKind: T["kind"],
     handler: EventHandler<T>,
     name: string,
-    context: string = "default",
-    timeout?: number,
+    options?: { context?: string; timeout?: number },
   ): void {
+    const context = options?.context ?? "default";
+    const timeout = options?.timeout ?? this.defaultTimeout;
+
     if (!this.handlers.has(eventKind)) {
       this.handlers.set(eventKind, []);
     }
@@ -175,10 +177,13 @@ export class CIEventBus {
       handler: handler as EventHandler<CIDomainEvent>,
       name,
       context,
-      timeout: timeout || this.defaultTimeout,
+      timeout,
     };
 
-    this.handlers.get(eventKind)!.push(registration);
+    const handlers = this.handlers.get(eventKind);
+    if (handlers) {
+      handlers.push(registration);
+    }
   }
 
   /**

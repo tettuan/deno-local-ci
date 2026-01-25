@@ -13,8 +13,9 @@
  * @module
  */
 
-import { CIConfig, ExecutionStrategy, ProcessResult, Result, ValidationError } from "./types.ts";
-import { CIDomainEvent, ExecutionId } from "./domain_events.ts";
+import { ExecutionStrategy } from "./types.ts";
+import type { CIConfig, ProcessResult, Result, ValidationError } from "./types.ts";
+import type { CIDomainEvent, ExecutionId } from "./domain_events.ts";
 
 // === Boundary Types ===
 

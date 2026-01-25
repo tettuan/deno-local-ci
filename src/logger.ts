@@ -16,11 +16,10 @@
  */
 
 import { BreakdownLogger } from "@tettuan/breakdownlogger";
-import {
-  BreakdownLoggerEnvConfig,
+import { BreakdownLoggerEnvConfig, createError } from "./types.ts";
+import type {
   CIStage,
   CISummaryStats,
-  createError,
   EnhancedProgressIndicator,
   LogMode,
   ProgressIndicator,
@@ -232,6 +231,7 @@ export class CILogger {
 
   /**
    * Log CI stage start per architecture design.
+   * Uses structured format: [Stage/<name>] per system.md Section 5
    */
   logStageStart(stage: CIStage): void {
     if (this.mode.kind === "silent" || this.mode.kind === "error-files-only") {
@@ -239,23 +239,24 @@ export class CILogger {
     }
 
     const stageName = this.getStageName(stage);
+    const stageTag = `[Stage/${stage.kind}]`;
     const commandInfo = this.getCommandInfo(stage);
 
     switch (this.mode.kind) {
       case "normal":
-        console.log(`\n🔄 Starting ${stageName}...`);
+        console.log(`\n${stageTag} 🔄 Starting ${stageName}...`);
         if (commandInfo) {
           console.log(`   └─ ${commandInfo}`);
         }
         break;
       case "debug":
         if (this.breakdownLogger) {
-          this.breakdownLogger.info(`Starting ${stageName}`);
+          this.breakdownLogger.info(`${stageTag} Starting ${stageName}`);
           if (commandInfo) {
-            this.breakdownLogger.debug(`Command: ${commandInfo}`);
+            this.breakdownLogger.debug(`${stageTag} Command: ${commandInfo}`);
           }
         } else {
-          console.log(`\n[DEBUG] Starting ${stageName}...`);
+          console.log(`\n${stageTag} [DEBUG] Starting ${stageName}...`);
           if (commandInfo) {
             console.log(`   └─ ${commandInfo}`);
           }
@@ -267,19 +268,112 @@ export class CILogger {
 
   /**
    * Log CI stage completion per architecture design.
+   * Uses structured format: [Stage/<name>] per system.md Section 5
    */
   logStageComplete(result: StageResult): void {
     const stageName = this.getStageName(result.stage);
+    const stageTag = `[Stage/${result.stage.kind}]`;
 
     switch (result.kind) {
       case "success":
-        this.logSuccess(stageName, result.duration, result.testSummary);
+        this.logSuccess(stageName, result.duration, result.testSummary, stageTag);
         break;
       case "failure":
-        this.logFailure(stageName, result.error);
+        this.logFailure(stageName, result.error, stageTag);
         break;
       case "skipped":
-        this.logSkipped(stageName, result.reason);
+        this.logSkipped(stageName, result.reason, stageTag);
+        break;
+    }
+  }
+
+  /**
+   * Log execution strategy per system.md Section 5.
+   * Uses structured format: [Strategy/<mode>]
+   */
+  logStrategy(mode: string, details?: string): void {
+    if (this.mode.kind === "silent" || this.mode.kind === "error-files-only") {
+      return;
+    }
+
+    const strategyTag = `[Strategy/${mode}]`;
+    const message = details ? `${strategyTag} ${details}` : strategyTag;
+
+    switch (this.mode.kind) {
+      case "normal":
+        console.log(`   ${message}`);
+        break;
+      case "debug":
+        if (this.breakdownLogger) {
+          this.breakdownLogger.info(message);
+        } else {
+          console.log(message);
+        }
+        break;
+    }
+  }
+
+  /**
+   * Log fallback transition per system.md Section 5.
+   * Uses structured format: [Fallback/<from>-><to>] batch #/total / fallback target: N files
+   *
+   * @param fromMode - Original execution mode
+   * @param toMode - Fallback execution mode
+   * @param options - Additional fallback information (batch number, target files, reason)
+   */
+  logFallback(
+    fromMode: string,
+    toMode: string,
+    options?: string | {
+      reason?: string;
+      batchNumber?: number;
+      totalBatches?: number;
+      targetFiles?: string[];
+    },
+  ): void {
+    const fallbackTag = `[Fallback/${fromMode}->${toMode}]`;
+
+    let details = "";
+
+    if (typeof options === "string") {
+      // Backward compatibility: simple reason string
+      details = options;
+    } else if (options) {
+      // New format with batch info per system.md
+      const parts: string[] = [];
+
+      if (options.batchNumber !== undefined && options.totalBatches !== undefined) {
+        parts.push(`batch ${options.batchNumber}/${options.totalBatches}`);
+      }
+
+      if (options.targetFiles && options.targetFiles.length > 0) {
+        parts.push(`fallback target: ${options.targetFiles.length} files`);
+      }
+
+      if (options.reason) {
+        parts.push(options.reason);
+      }
+
+      details = parts.join(" / ");
+    }
+
+    const message = details ? `${fallbackTag} ${details}` : fallbackTag;
+
+    switch (this.mode.kind) {
+      case "normal":
+        console.log(`${message}`);
+        break;
+      case "debug":
+        if (this.breakdownLogger) {
+          this.breakdownLogger.info(message);
+        } else {
+          console.log(`[FALLBACK] ${message}`);
+        }
+        break;
+      case "silent":
+      case "error-files-only":
+        // Log fallbacks even in silent mode as they're important
+        console.log(message);
         break;
     }
   }
@@ -506,21 +600,27 @@ export class CILogger {
     this.logDebug("Stage details", details);
   }
 
-  private logSuccess(stageName: string, duration?: number, testSummary?: string): void {
+  private logSuccess(
+    stageName: string,
+    duration?: number,
+    testSummary?: string,
+    stageTag?: string,
+  ): void {
     const durationStr = duration ? ` (${(duration / 1000).toFixed(2)}s)` : "";
+    const prefix = stageTag ? `${stageTag} ` : "";
 
     switch (this.mode.kind) {
       case "normal":
-        console.log(`✅ ${stageName} completed${durationStr}`);
+        console.log(`${prefix}✅ ${stageName} completed${durationStr}`);
         if (testSummary) {
           console.log(`   ${testSummary}`);
         }
         break;
       case "debug":
         if (this.breakdownLogger) {
-          this.breakdownLogger.info(`${stageName} completed${durationStr}`);
+          this.breakdownLogger.info(`${prefix}${stageName} completed${durationStr}`);
           if (testSummary) {
-            this.breakdownLogger.info(`Test summary: ${testSummary}`);
+            this.breakdownLogger.info(`${prefix}Test summary: ${testSummary}`);
           }
         }
         break;
@@ -531,32 +631,36 @@ export class CILogger {
     }
   }
 
-  private logFailure(stageName: string, error: string): void {
+  private logFailure(stageName: string, error: string, stageTag?: string): void {
+    const prefix = stageTag ? `${stageTag} ` : "";
+
     switch (this.mode.kind) {
       case "normal":
       case "silent":
-        console.error(`❌ ${stageName} failed`);
+        console.error(`${prefix}❌ ${stageName} failed`);
         console.error(`   ${error}`);
         break;
       case "debug":
         if (this.breakdownLogger) {
-          this.breakdownLogger.error(`${stageName} failed: ${error}`);
+          this.breakdownLogger.error(`${prefix}${stageName} failed: ${error}`);
         }
         break;
       case "error-files-only":
-        console.error(`${stageName}: ${error}`);
+        console.error(`${prefix}${stageName}: ${error}`);
         break;
     }
   }
 
-  private logSkipped(stageName: string, reason: string): void {
+  private logSkipped(stageName: string, reason: string, stageTag?: string): void {
+    const prefix = stageTag ? `${stageTag} ` : "";
+
     switch (this.mode.kind) {
       case "normal":
-        console.log(`⏭️  ${stageName} skipped: ${reason}`);
+        console.log(`${prefix}⏭️  ${stageName} skipped: ${reason}`);
         break;
       case "debug":
         if (this.breakdownLogger) {
-          this.breakdownLogger.info(`${stageName} skipped: ${reason}`);
+          this.breakdownLogger.info(`${prefix}${stageName} skipped: ${reason}`);
         }
         break;
       case "silent":

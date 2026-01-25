@@ -14,17 +14,39 @@
  * @module
  */
 
-import {
-  BreakdownLoggerEnvConfig,
-  CI_CONFIG,
-  CIConfig,
-  createError,
-  ExecutionMode,
-  LogMode,
-  Result,
-  ValidationError,
-} from "./types.ts";
+import { BreakdownLoggerEnvConfig, CI_CONFIG, createError } from "./types.ts";
+import type { CIConfig, ExecutionMode, LogMode, Result, ValidationError } from "./types.ts";
 import { getFullVersion } from "./version.ts";
+
+/**
+ * Subcommand type for CLI operations.
+ * 'run' is the default CI execution, 'status' shows history, 'retry' re-runs failed tests.
+ */
+export type Subcommand = "run" | "status" | "retry";
+
+/**
+ * Options for the 'status' subcommand.
+ */
+export interface StatusOptions {
+  /** Number of records to show (default: 5) */
+  count?: number;
+  /** Show only failed executions */
+  failed?: boolean;
+  /** Output as JSON format */
+  json?: boolean;
+  /** Show verbose output */
+  verbose?: boolean;
+}
+
+/**
+ * Options for the 'retry' subcommand.
+ */
+export interface RetryOptions {
+  /** Specific execution ID to retry */
+  id?: string;
+  /** Retry only specific stage */
+  stage?: string;
+}
 
 /**
  * Command-line interface options configuration.
@@ -65,6 +87,12 @@ export interface CLIOptions {
   help?: boolean;
   version?: boolean;
   workingDirectory?: string;
+  /** Subcommand: run (default), status, retry */
+  subcommand?: Subcommand;
+  /** Options for status subcommand */
+  statusOptions?: StatusOptions;
+  /** Options for retry subcommand */
+  retryOptions?: RetryOptions;
 }
 
 /**
@@ -79,6 +107,22 @@ export class CLIParser {
   static parseArgs(args: string[]): Result<CLIOptions, ValidationError & { message: string }> {
     const options: CLIOptions = {};
     const positionalArgs: string[] = [];
+
+    // Check for subcommand as first argument
+    if (args.length > 0 && !args[0].startsWith("-")) {
+      const firstArg = args[0];
+      if (firstArg === "status") {
+        options.subcommand = "status";
+        return this.parseStatusArgs(args.slice(1), options);
+      } else if (firstArg === "retry") {
+        options.subcommand = "retry";
+        return this.parseRetryArgs(args.slice(1), options);
+      }
+      // If not a known subcommand, treat as positional arg (hierarchy)
+    }
+
+    // Default subcommand is 'run'
+    options.subcommand = "run";
 
     for (let i = 0; i < args.length; i++) {
       const arg = args[i];
@@ -459,5 +503,192 @@ EXECUTION MODES:
           }),
         };
     }
+  }
+
+  /**
+   * Parse arguments for 'status' subcommand
+   */
+  private static parseStatusArgs(
+    args: string[],
+    options: CLIOptions,
+  ): Result<CLIOptions, ValidationError & { message: string }> {
+    const statusOptions: StatusOptions = {
+      count: 5,
+      failed: false,
+      json: false,
+      verbose: false,
+    };
+
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i];
+
+      switch (arg) {
+        case "--count":
+        case "-n": {
+          const countStr = args[++i];
+          const count = parseInt(countStr, 10);
+          if (isNaN(count) || count < 1 || count > 100) {
+            return {
+              ok: false,
+              error: createError({
+                kind: "OutOfRange",
+                value: countStr,
+                min: 1,
+                max: 100,
+              }, "Count must be between 1 and 100"),
+            };
+          }
+          statusOptions.count = count;
+          break;
+        }
+        case "--failed":
+        case "-f":
+          statusOptions.failed = true;
+          break;
+        case "--json":
+          statusOptions.json = true;
+          break;
+        case "--verbose":
+        case "-v":
+          statusOptions.verbose = true;
+          break;
+        case "--help":
+        case "-h":
+          options.help = true;
+          break;
+        default:
+          if (arg.startsWith("-")) {
+            return {
+              ok: false,
+              error: createError({
+                kind: "PatternMismatch",
+                value: arg,
+                pattern: "known status option",
+              }, `Unknown status option: ${arg}`),
+            };
+          }
+      }
+    }
+
+    options.statusOptions = statusOptions;
+    return { ok: true, data: options };
+  }
+
+  /**
+   * Parse arguments for 'retry' subcommand
+   */
+  private static parseRetryArgs(
+    args: string[],
+    options: CLIOptions,
+  ): Result<CLIOptions, ValidationError & { message: string }> {
+    const retryOptions: RetryOptions = {};
+
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i];
+
+      switch (arg) {
+        case "--id": {
+          retryOptions.id = args[++i];
+          break;
+        }
+        case "--stage": {
+          const stage = args[++i];
+          const validStages = ["type-check", "test", "lint", "format"];
+          if (!validStages.includes(stage)) {
+            return {
+              ok: false,
+              error: createError({
+                kind: "PatternMismatch",
+                value: stage,
+                pattern: validStages.join("|"),
+              }, `Invalid stage: ${stage}. Valid stages: ${validStages.join(", ")}`),
+            };
+          }
+          retryOptions.stage = stage;
+          break;
+        }
+        case "--help":
+        case "-h":
+          options.help = true;
+          break;
+        default:
+          if (arg.startsWith("-")) {
+            return {
+              ok: false,
+              error: createError({
+                kind: "PatternMismatch",
+                value: arg,
+                pattern: "known retry option",
+              }, `Unknown retry option: ${arg}`),
+            };
+          }
+      }
+    }
+
+    options.retryOptions = retryOptions;
+    return { ok: true, data: options };
+  }
+
+  /**
+   * Show help for status subcommand
+   */
+  static showStatusHelp(): void {
+    console.log(`
+Deno Local CI - Status Command
+
+Show recent CI execution history from .ci-local/history.json
+
+USAGE:
+    deno run [permissions] mod.ts status [OPTIONS]
+
+OPTIONS:
+    --count, -n <N>    Number of records to show [default: 5]
+    --failed, -f       Show only failed executions
+    --json             Output as JSON format
+    --verbose, -v      Show detailed stage information
+    --help, -h         Show this help message
+
+EXAMPLES:
+    # Show last 5 executions
+    deno run --allow-all mod.ts status
+
+    # Show last 10 executions
+    deno run --allow-all mod.ts status --count 10
+
+    # Show only failed executions
+    deno run --allow-all mod.ts status --failed
+
+    # Output as JSON
+    deno run --allow-all mod.ts status --json
+`);
+  }
+
+  /**
+   * Show help for retry subcommand
+   */
+  static showRetryHelp(): void {
+    console.log(`
+Deno Local CI - Retry Command
+
+Retry failed CI execution using saved history.
+
+USAGE:
+    deno run [permissions] mod.ts retry [OPTIONS]
+
+OPTIONS:
+    --id <ID>          Retry specific execution by ID
+    --stage <STAGE>    Retry only specific stage (type-check, test, lint, format)
+    --help, -h         Show this help message
+
+EXAMPLES:
+    # Retry last failed execution
+    deno run --allow-all mod.ts retry
+
+    # Retry specific execution
+    deno run --allow-all mod.ts retry --id abc123
+
+    # Retry only test stage of last failure
+    deno run --allow-all mod.ts retry --stage test
+`);
   }
 }
