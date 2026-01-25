@@ -16,6 +16,7 @@
     "url": "https://github.com/tettuan"
   },
   "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0",
     "@std/path": "jsr:@std/path@^1.1.1",
     "@tettuan/breakdownlogger": "jsr:@tettuan/breakdownlogger@^1.0.8"
   },
@@ -74,6 +75,7 @@
   },
   "fmt": {
     "include": ["src/", "*.ts", "*.md"],
+    "exclude": ["tests/error_tests/"],
     "useTabs": false,
     "lineWidth": 100,
     "indentWidth": 2,
@@ -82,7 +84,32 @@
   "lint": {
     "include": ["src/", "*.ts"],
     "rules": {
-      "tags": ["recommended"]
+      "tags": ["recommended"],
+      "include": [
+        "ban-untagged-todo",
+        "camelcase",
+        "default-param-last",
+        "eqeqeq",
+        "explicit-function-return-type",
+        "explicit-module-boundary-types",
+        "no-console",
+        "no-const-assign",
+        "no-eval",
+        "no-external-import",
+        "no-implicit-declare-namespace-export",
+        "no-non-null-asserted-optional-chain",
+        "no-non-null-assertion",
+        "no-self-compare",
+        "no-sparse-arrays",
+        "no-sync-fn-in-async-fn",
+        "no-throw-literal",
+        "no-undef",
+        "single-var-declarator",
+        "verbatim-module-syntax"
+      ],
+      "exclude": [
+        "no-console"
+      ]
     }
   },
   "compilerOptions": {

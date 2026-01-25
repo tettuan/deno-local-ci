@@ -14,17 +14,20 @@
  * @module
  */
 
-import {
+import type {
   CIConfig,
   CIError,
   CIStage,
   CISummaryStats,
   EnhancedProgressIndicator,
   ExecutionStrategy,
+  FailedBatchInfo,
   ProcessResult,
   ProcessResultWithBatch,
   ProgressIndicator,
   Result,
+  ResultWithBatch,
+  StageExecutionRecord,
   StageResult,
   TestFileInfo,
   ValidationError,
@@ -39,7 +42,8 @@ import {
 
 import { DenoCommandRunner, extractTestSummaryLine } from "./process_runner.ts";
 import { ProjectFileDiscovery } from "./file_system.ts";
-import { CILogger } from "./logger.ts";
+import type { CILogger } from "./logger.ts";
+import { createExecutionRecord, HistoryStore } from "./history_store.ts";
 
 /**
  * Result of CI execution containing success status, stage results, and timing information.
@@ -90,6 +94,10 @@ export class CIRunner {
   private readonly logger: CILogger;
   private readonly config: CIConfig;
   private readonly projectRoot: string;
+  private readonly historyStore: HistoryStore;
+
+  // Track failed batch info for history
+  private lastFailedBatchInfo?: FailedBatchInfo;
 
   // Statistics tracking
   private stats: {
@@ -123,10 +131,12 @@ export class CIRunner {
     logger: CILogger,
     config: CIConfig,
     projectRoot: string,
+    historyStore: HistoryStore,
   ) {
     this.logger = logger;
     this.config = config;
     this.projectRoot = projectRoot;
+    this.historyStore = historyStore;
   }
 
   /**
@@ -145,9 +155,17 @@ export class CIRunner {
       return projectRootResult;
     }
 
+    const projectRoot = projectRootResult.data;
+
+    // Create HistoryStore for this project
+    const historyStoreResult = HistoryStore.create(projectRoot);
+    if (!historyStoreResult.ok) {
+      return historyStoreResult;
+    }
+
     return {
       ok: true,
-      data: new CIRunner(logger, config, projectRootResult.data),
+      data: new CIRunner(logger, config, projectRoot, historyStoreResult.data),
     };
   }
 
@@ -171,7 +189,7 @@ export class CIRunner {
       // File discovery using infrastructure layer
       const filesResult = await this.discoverProjectFiles();
       if (!filesResult.ok) {
-        return this.createFailureResult(
+        return await this.createFailureResult(
           startTime,
           completedStages,
           {
@@ -212,7 +230,7 @@ export class CIRunner {
               duration: 0,
             });
 
-            return this.createFailureResult(
+            return await this.createFailureResult(
               startTime,
               completedStages,
               error,
@@ -237,6 +255,9 @@ export class CIRunner {
         summaryStats,
       );
 
+      // Save execution to history (per system.md Section 5)
+      await this.saveExecutionToHistory(true, totalDuration, completedStages);
+
       return {
         success: true,
         completedStages,
@@ -259,6 +280,9 @@ export class CIRunner {
       };
 
       this.logger.logProgress(finalProgressState);
+
+      // Save execution to history (per system.md Section 5)
+      await this.saveExecutionToHistory(false, totalDuration, completedStages);
 
       return {
         success: false,
@@ -292,11 +316,11 @@ export class CIRunner {
   /**
    * Create failure result with proper error information.
    */
-  private createFailureResult(
+  private async createFailureResult(
     startTime: number,
     completedStages: StageResult[],
     error: CIError,
-  ): CIExecutionResult {
+  ): Promise<CIExecutionResult> {
     const totalDuration = performance.now() - startTime;
 
     this.logger.logError("CI execution failed", error);
@@ -315,6 +339,9 @@ export class CIRunner {
 
     this.logger.logProgress(finalProgressState);
 
+    // Save execution to history (per system.md Section 5)
+    await this.saveExecutionToHistory(false, totalDuration, completedStages);
+
     return {
       success: false,
       completedStages,
@@ -322,6 +349,87 @@ export class CIRunner {
       errorDetails: error,
       progressState: finalProgressState,
     };
+  }
+
+  /**
+   * Save execution record to history store (per system.md Section 5).
+   */
+  private async saveExecutionToHistory(
+    success: boolean,
+    totalDuration: number,
+    completedStages: StageResult[],
+  ): Promise<void> {
+    try {
+      // Convert StageResult[] to StageExecutionRecord[]
+      const stageRecords: StageExecutionRecord[] = completedStages.map((stage) => {
+        const record: StageExecutionRecord = {
+          stage: stage.stage.kind,
+          status: stage.kind,
+          duration: stage.kind === "success" ? stage.duration : 0,
+        };
+
+        // Add strategy info for test stages
+        if (stage.stage.kind === "test-execution") {
+          record.strategy = stage.stage.strategy.mode.kind;
+        }
+
+        // Add fallback info if present
+        if (this.progressState.isFallback && this.progressState.fallbackMessage) {
+          const match = this.progressState.fallbackMessage.match(/from (\w+) to (\w+)/);
+          if (match) {
+            record.fallback = { from: match[1], to: match[2] };
+          }
+        }
+
+        // Add error info for failures with file extraction
+        if (stage.kind === "failure") {
+          // Use ErrorClassificationService to extract error files
+          const classifiedError = ErrorClassificationService.classifyError({
+            success: false,
+            code: 1,
+            stdout: "",
+            stderr: stage.error,
+            duration: 0,
+          });
+          const errorFiles = ErrorClassificationService.extractErrorFiles(classifiedError);
+
+          record.error = {
+            kind: stage.stage.kind,
+            files: errorFiles.length > 0 ? errorFiles : undefined,
+            message: stage.error,
+          };
+        }
+
+        // Add test summary if available
+        if (stage.kind === "success" && stage.testSummary) {
+          record.testSummary = stage.testSummary;
+        }
+
+        return record;
+      });
+
+      // Get mode string from config
+      const modeString = this.config.mode?.kind ?? "all";
+
+      const executionRecord = createExecutionRecord({
+        success,
+        totalDuration,
+        stages: stageRecords,
+        config: {
+          mode: modeString,
+          hierarchy: this.config.hierarchy ?? null,
+          fallbackEnabled: this.config.fallbackEnabled ?? true,
+          batchSize: this.config.batchSize,
+        },
+        failedBatchInfo: this.lastFailedBatchInfo,
+      });
+
+      await this.historyStore.save(executionRecord);
+      this.logger.logDebug("Execution saved to history", { id: executionRecord.id });
+    } catch (error) {
+      // Log but don't fail the CI run if history save fails
+      this.logger.logDebug("Failed to save execution to history", { error });
+    }
   }
 
   /**
@@ -503,6 +611,9 @@ export class CIRunner {
 
   private async executeStage(stage: CIStage): Promise<StageResult> {
     const startTime = performance.now();
+
+    // Clear previous failed batch info at stage start
+    this.lastFailedBatchInfo = undefined;
 
     this.logger.logStageStart(stage);
 
@@ -796,6 +907,8 @@ export class CIRunner {
             // バッチ失敗時: 段階内フォールバック（Batch → Single-file）を実行
             if (strategy.fallbackEnabled) {
               const failedBatchInfo = { startIndex: i, endIndex: i + batchSize - 1, files: batch };
+              // Save failed batch info for history (per system.md Section 5)
+              this.lastFailedBatchInfo = failedBatchInfo;
               const fallbackStrategyResult = StageInternalFallbackService.createFallbackStrategy(
                 strategy,
                 failedBatchInfo,
@@ -803,9 +916,14 @@ export class CIRunner {
 
               if (fallbackStrategyResult.ok) {
                 const fallbackStrategy = fallbackStrategyResult.data;
-                this.logger.logInfo(
-                  `Switching fallback strategy: ${strategy.mode.kind} → ${fallbackStrategy.mode.kind}`,
-                );
+
+                // Log fallback with batch info per system.md
+                this.logger.logFallback(strategy.mode.kind, fallbackStrategy.mode.kind, {
+                  batchNumber,
+                  totalBatches,
+                  targetFiles: failedBatchInfo.files,
+                  reason: "Batch execution failed",
+                });
 
                 // フォールバック時の進捗指標更新
                 this.updateProgress(
@@ -837,11 +955,15 @@ export class CIRunner {
             }
 
             // フォールバックが無効、または失敗した場合は失敗として返す
+            const failedBatch = { startIndex: i, endIndex: i + batchSize - 1, files: batch };
+            // Always save failed batch info for history
+            this.lastFailedBatchInfo = failedBatch;
+
             if (result.ok) {
               const processResultWithBatch: ProcessResultWithBatch = {
                 ...result.data,
                 success: false,
-                failedBatch: { startIndex: i, endIndex: i + batchSize - 1, files: batch },
+                failedBatch,
               };
               return { ok: true, data: processResultWithBatch };
             } else {
@@ -940,7 +1062,7 @@ export class CIRunner {
     originalError: string,
     hierarchy?: string | null,
     failedBatch?: { startIndex: number; endIndex: number; files: string[] },
-  ) {
+  ): Promise<Result<ProcessResultWithBatch, ValidationError & { message: string }>> {
     const fallbackStrategyResult = StageInternalFallbackService.createFallbackStrategy(
       currentStrategy,
       failedBatch,
@@ -951,9 +1073,30 @@ export class CIRunner {
     }
 
     const fallbackStrategy = fallbackStrategyResult.data;
-    this.logger.logInfo(
-      `Test fallback strategy activated: ${currentStrategy.mode.kind} → ${fallbackStrategy.mode.kind}`,
+
+    // 対象ファイルを決定: 失敗したバッチ範囲のみか全ファイルか
+    const targetFiles = StageInternalFallbackService.extractTargetFiles(
+      testFiles,
+      currentStrategy,
+      fallbackStrategy,
+      failedBatch,
     );
+
+    // Log fallback with batch info per system.md
+    this.logger.logFallback(currentStrategy.mode.kind, fallbackStrategy.mode.kind, {
+      batchNumber: failedBatch
+        ? Math.floor(
+          failedBatch.startIndex / (currentStrategy.mode.kind === "batch"
+            ? (currentStrategy.mode as { batchSize: number }).batchSize
+            : 1),
+        ) + 1
+        : undefined,
+      totalBatches: currentStrategy.mode.kind === "batch"
+        ? Math.ceil(testFiles.length / (currentStrategy.mode as { batchSize: number }).batchSize)
+        : undefined,
+      targetFiles: targetFiles,
+      reason: "Test execution failed",
+    });
     this.logger.logError("Original test error", originalError);
 
     // フォールバック時の進捗指標更新
@@ -963,14 +1106,6 @@ export class CIRunner {
       this.progressState.errorFiles,
       true,
       `Fallback from ${currentStrategy.mode.kind} to ${fallbackStrategy.mode.kind}`,
-    );
-
-    // 対象ファイルを決定: 失敗したバッチ範囲のみか全ファイルか
-    const targetFiles = StageInternalFallbackService.extractTargetFiles(
-      testFiles,
-      currentStrategy,
-      fallbackStrategy,
-      failedBatch,
     );
 
     return await this.executeTestsWithStrategy(fallbackStrategy, targetFiles, hierarchy);
@@ -1137,7 +1272,7 @@ export class CIRunner {
   private async executeTypeCheckWithStrategy(
     strategy: ExecutionStrategy,
     files: string[],
-  ) {
+  ): Promise<ResultWithBatch<ProcessResult, ValidationError & { message: string }>> {
     switch (strategy.mode.kind) {
       case "all":
         this.logger.logInfo(`[TYPECHECK-ALL] Processing all ${files.length} files together`);
@@ -1150,9 +1285,12 @@ export class CIRunner {
           const result = await DenoCommandRunner.typeCheck(batch);
           if (!result.ok || !result.data.success) {
             // 失敗したバッチの情報を含める
+            const failedBatch = { startIndex: i, endIndex: i + batchSize - 1, files: batch };
+            // Save failed batch info for history
+            this.lastFailedBatchInfo = failedBatch;
             return {
               ...result,
-              failedBatch: { startIndex: i, endIndex: i + batchSize - 1, files: batch },
+              failedBatch,
             };
           }
         }
@@ -1178,7 +1316,7 @@ export class CIRunner {
     allFiles: string[],
     originalError: string,
     failedBatch?: { startIndex: number; endIndex: number; files: string[] },
-  ) {
+  ): Promise<ResultWithBatch<ProcessResult, ValidationError & { message: string }>> {
     const fallbackStrategyResult = StageInternalFallbackService.createFallbackStrategy(
       currentStrategy,
       failedBatch,
@@ -1189,9 +1327,30 @@ export class CIRunner {
     }
 
     const fallbackStrategy = fallbackStrategyResult.data;
-    this.logger.logInfo(
-      `Type check fallback strategy activated: ${currentStrategy.mode.kind} → ${fallbackStrategy.mode.kind}`,
+
+    // 対象ファイルを決定
+    const targetFiles = StageInternalFallbackService.extractTargetFiles(
+      allFiles,
+      currentStrategy,
+      fallbackStrategy,
+      failedBatch,
     );
+
+    // Log fallback with batch info per system.md
+    this.logger.logFallback(currentStrategy.mode.kind, fallbackStrategy.mode.kind, {
+      batchNumber: failedBatch
+        ? Math.floor(
+          failedBatch.startIndex / (currentStrategy.mode.kind === "batch"
+            ? (currentStrategy.mode as { batchSize: number }).batchSize
+            : 1),
+        ) + 1
+        : undefined,
+      totalBatches: currentStrategy.mode.kind === "batch"
+        ? Math.ceil(allFiles.length / (currentStrategy.mode as { batchSize: number }).batchSize)
+        : undefined,
+      targetFiles: targetFiles,
+      reason: "Type check failed",
+    });
     this.logger.logError("Original type check error", originalError);
 
     // フォールバック時の進捗指標更新
@@ -1203,21 +1362,13 @@ export class CIRunner {
       `Fallback from ${currentStrategy.mode.kind} to ${fallbackStrategy.mode.kind}`,
     );
 
-    // 対象ファイルを決定
-    const targetFiles = StageInternalFallbackService.extractTargetFiles(
-      allFiles,
-      currentStrategy,
-      fallbackStrategy,
-      failedBatch,
-    );
-
     return await this.executeTypeCheckWithStrategy(fallbackStrategy, targetFiles);
   }
 
   private async executeLintWithStrategy(
     strategy: ExecutionStrategy,
     files: string[],
-  ) {
+  ): Promise<ResultWithBatch<ProcessResult, ValidationError & { message: string }>> {
     switch (strategy.mode.kind) {
       case "all":
         return await DenoCommandRunner.lint(files);
@@ -1228,11 +1379,13 @@ export class CIRunner {
           const batch = files.slice(i, i + batchSize);
           const result = await DenoCommandRunner.lint(batch);
           if (!result.ok || !result.data.success) {
-            const error = {
+            const failedBatch = { startIndex: i, endIndex: i + batchSize - 1, files: batch };
+            // Save failed batch info for history
+            this.lastFailedBatchInfo = failedBatch;
+            return {
               ...result,
-              failedBatch: { startIndex: i, endIndex: i + batchSize - 1, files: batch },
+              failedBatch,
             };
-            return error;
           }
         }
         return await DenoCommandRunner.lint([]); // 成功を示す空の実行
@@ -1257,7 +1410,7 @@ export class CIRunner {
     files: string[],
     originalError: string,
     failedBatch?: { startIndex: number; endIndex: number; files: string[] },
-  ) {
+  ): Promise<ResultWithBatch<ProcessResult, ValidationError & { message: string }>> {
     const fallbackStrategyResult = StageInternalFallbackService.createFallbackStrategy(
       currentStrategy,
       failedBatch,
@@ -1268,10 +1421,6 @@ export class CIRunner {
     }
 
     const fallbackStrategy = fallbackStrategyResult.data;
-    this.logger.logInfo(
-      `Lint fallback strategy activated: ${currentStrategy.mode.kind} → ${fallbackStrategy.mode.kind}`,
-    );
-    this.logger.logError("Original lint error", originalError);
 
     // 対象ファイルを決定: 失敗したバッチ範囲のみか全ファイルか
     const targetFiles = StageInternalFallbackService.extractTargetFiles(
@@ -1281,6 +1430,23 @@ export class CIRunner {
       failedBatch,
     );
 
+    // Log fallback with batch info per system.md
+    this.logger.logFallback(currentStrategy.mode.kind, fallbackStrategy.mode.kind, {
+      batchNumber: failedBatch
+        ? Math.floor(
+          failedBatch.startIndex / (currentStrategy.mode.kind === "batch"
+            ? (currentStrategy.mode as { batchSize: number }).batchSize
+            : 1),
+        ) + 1
+        : undefined,
+      totalBatches: currentStrategy.mode.kind === "batch"
+        ? Math.ceil(files.length / (currentStrategy.mode as { batchSize: number }).batchSize)
+        : undefined,
+      targetFiles: targetFiles,
+      reason: "Lint check failed",
+    });
+    this.logger.logError("Original lint error", originalError);
+
     return await this.executeLintWithStrategy(fallbackStrategy, targetFiles);
   }
 
@@ -1288,7 +1454,7 @@ export class CIRunner {
     strategy: ExecutionStrategy,
     files: string[],
     options: { check?: boolean },
-  ) {
+  ): Promise<ResultWithBatch<ProcessResult, ValidationError & { message: string }>> {
     switch (strategy.mode.kind) {
       case "all":
         return await DenoCommandRunner.format(files, options);
@@ -1299,11 +1465,13 @@ export class CIRunner {
           const batch = files.slice(i, i + batchSize);
           const result = await DenoCommandRunner.format(batch, options);
           if (!result.ok || !result.data.success) {
-            const error = {
+            const failedBatch = { startIndex: i, endIndex: i + batchSize - 1, files: batch };
+            // Save failed batch info for history
+            this.lastFailedBatchInfo = failedBatch;
+            return {
               ...result,
-              failedBatch: { startIndex: i, endIndex: i + batchSize - 1, files: batch },
+              failedBatch,
             };
-            return error;
           }
         }
         return await DenoCommandRunner.format([], options); // 成功を示す空の実行
@@ -1328,7 +1496,7 @@ export class CIRunner {
     files: string[],
     originalError: string,
     options: { check?: boolean },
-  ) {
+  ): Promise<ResultWithBatch<ProcessResult, ValidationError & { message: string }>> {
     const fallbackStrategyResult = StageInternalFallbackService.createFallbackStrategy(
       currentStrategy,
     );
@@ -1338,9 +1506,12 @@ export class CIRunner {
     }
 
     const fallbackStrategy = fallbackStrategyResult.data;
-    this.logger.logInfo(
-      `Format fallback strategy activated: ${currentStrategy.mode.kind} → ${fallbackStrategy.mode.kind}`,
-    );
+
+    // Log fallback per system.md (format doesn't have batch info)
+    this.logger.logFallback(currentStrategy.mode.kind, fallbackStrategy.mode.kind, {
+      targetFiles: files,
+      reason: "Format check failed",
+    });
     this.logger.logError("Original format error", originalError);
 
     return await this.executeFormatWithStrategy(fallbackStrategy, files, options);

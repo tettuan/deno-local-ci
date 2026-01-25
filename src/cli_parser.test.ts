@@ -5,7 +5,7 @@
  * Option parsing and error handling verification
  */
 
-import { assertEquals, assertExists } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals, assertExists } from "@std/assert";
 import { type CLIOptions, CLIParser } from "./cli_parser.ts";
 
 Deno.test("CLIParser - parse basic options", () => {

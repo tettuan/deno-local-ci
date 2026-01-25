@@ -5,7 +5,7 @@
  * Type safety verification based on totality principles
  */
 
-import { assertEquals, assertExists } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals, assertExists } from "@std/assert";
 
 import {
   BreakdownLoggerEnvConfig,
@@ -71,9 +71,11 @@ Deno.test("ExecutionStrategy - fallback mode progression", () => {
   if (allStrategy.ok) {
     const nextMode = allStrategy.data.getNextFallbackMode();
     assertExists(nextMode);
-    assertEquals(nextMode!.kind, "batch");
-    if (nextMode!.kind === "batch") {
-      assertEquals(nextMode.batchSize, 25);
+    if (nextMode !== null) {
+      assertEquals(nextMode.kind, "batch");
+      if (nextMode.kind === "batch") {
+        assertEquals(nextMode.batchSize, 25);
+      }
     }
   }
 
@@ -89,9 +91,11 @@ Deno.test("ExecutionStrategy - fallback mode progression", () => {
   if (batchStrategy.ok) {
     const nextMode = batchStrategy.data.getNextFallbackMode();
     assertExists(nextMode);
-    assertEquals(nextMode!.kind, "single-file");
-    if (nextMode!.kind === "single-file") {
-      assertEquals(nextMode.stopOnFirstError, true);
+    if (nextMode !== null) {
+      assertEquals(nextMode.kind, "single-file");
+      if (nextMode.kind === "single-file") {
+        assertEquals(nextMode.stopOnFirstError, true);
+      }
     }
   }
 

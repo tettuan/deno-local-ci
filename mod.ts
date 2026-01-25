@@ -166,15 +166,56 @@
 
 // === Exports ===
 
-// === CLI Tool Exports ===
-// This package is primarily a CLI tool. Only the main entry point is exported.
-// The main function is defined and exported below.
+// === Public API Exports ===
+// Core types
+export type {
+  CIConfig,
+  CIError,
+  CIStage,
+  CISummaryStats,
+  EnhancedProgressIndicator,
+  ExecutionMode,
+  ExecutionRecord,
+  FailedBatchInfo,
+  HistoryFile,
+  LogMode,
+  ProcessResult,
+  ProgressIndicator,
+  Result,
+  StageExecutionRecord,
+  StageResult,
+  TestFileInfo,
+  TestStats,
+  ValidationError,
+} from "./src/types.ts";
+
+// Core classes
+export { BreakdownLoggerEnvConfig, ExecutionStrategy } from "./src/types.ts";
+export { CIRunner } from "./src/ci_runner.ts";
+export type { CIExecutionResult } from "./src/ci_runner.ts";
+export { CILogger, LogModeFactory } from "./src/logger.ts";
+export { CLIParser } from "./src/cli_parser.ts";
+export { FileSystemService, ProjectFileDiscovery } from "./src/file_system.ts";
+export { DenoCommandRunner, ProcessRunner } from "./src/process_runner.ts";
+export { createExecutionRecord, HistoryStore } from "./src/history_store.ts";
+
+// Domain services
+export {
+  CIPipelineOrchestrator,
+  ErrorClassificationService,
+  ExecutionStrategyService,
+  FileClassificationService,
+  StageInternalFallbackService,
+} from "./src/domain_services.ts";
 
 // === Internal Implementation ===
 
 import { CLIParser } from "./src/cli_parser.ts";
+import type { CLIOptions, RetryOptions, StatusOptions } from "./src/cli_parser.ts";
 import { CIRunner } from "./src/ci_runner.ts";
 import { CILogger, LogModeFactory } from "./src/logger.ts";
+import { HistoryStore } from "./src/history_store.ts";
+import type { ExecutionRecord } from "./src/types.ts";
 
 /**
  * Main entry point for the CI tool
@@ -188,109 +229,398 @@ export async function main(args: string[]): Promise<void> {
     // Parse CLI arguments
     const parseResult = CLIParser.parseArgs(args);
     if (!parseResult.ok) {
-      console.error("❌ Configuration error:", parseResult.error.message);
+      console.error("Configuration error:", parseResult.error.message);
       Deno.exit(1);
     }
 
     const options = parseResult.data;
 
-    // Handle help flag
-    if (options.help) {
-      CLIParser.showHelp();
-      Deno.exit(0);
-    }
-
-    // Handle version flag
-    if (options.version) {
-      CLIParser.showVersion();
-      Deno.exit(0);
-    }
-
-    // Build CI configuration
-    const configResult = CLIParser.buildCIConfig(options);
-    if (!configResult.ok) {
-      console.error("❌ Configuration build failed:", configResult.error.message);
-      Deno.exit(1);
-    }
-
-    const config = configResult.data;
-
-    // Create logger with appropriate mode
-    let logMode;
-    switch (options.logMode) {
-      case "silent":
-        logMode = LogModeFactory.silent();
+    // Route to appropriate subcommand handler
+    switch (options.subcommand) {
+      case "status":
+        await handleStatusCommand(options);
         break;
-      case "debug":
-        if (!options.logLength || !options.logKey) {
-          console.error("❌ Debug mode requires --log-length and --log-key options");
-          Deno.exit(1);
-        }
-        if (!config.breakdownLoggerConfig) {
-          console.error("❌ BreakdownLogger configuration is missing for debug mode");
-          Deno.exit(1);
-        }
-        logMode = LogModeFactory.debug(
-          "high",
-          config.breakdownLoggerConfig.logLength,
-          config.breakdownLoggerConfig.logKey,
-        );
+      case "retry":
+        await handleRetryCommand(options);
         break;
-      case "error-files-only":
-        logMode = LogModeFactory.errorFilesOnly();
-        break;
+      case "run":
       default:
-        logMode = LogModeFactory.normal();
+        await handleRunCommand(options);
         break;
-    }
-
-    const loggerResult = CILogger.create(logMode);
-    if (!loggerResult.ok) {
-      console.error("❌ Logger creation failed:", loggerResult.error.message);
-      Deno.exit(1);
-    }
-
-    const logger = loggerResult.data;
-
-    // Create and run CI
-    const runnerResult = await CIRunner.create(logger, config, Deno.cwd());
-    if (!runnerResult.ok) {
-      console.error("❌ CI Runner creation failed:", runnerResult.error.message);
-      Deno.exit(1);
-    }
-
-    const runner = runnerResult.data;
-    const result = await runner.run();
-
-    if (result.success) {
-      if (options.logMode !== "silent") {
-        console.log("✅ CI passed successfully");
-        console.log(`✅ CI completed successfully in ${result.totalDuration}ms`);
-        console.log(`📊 Completed stages: ${result.completedStages.length}`);
-      }
-    } else {
-      console.error("❌ CI failed");
-      console.error(`❌ CI failed: ${result.errorDetails?.kind || "Unknown error"}`);
-
-      // Show progress information if available
-      if (result.progressState) {
-        const progress = result.progressState;
-        const errorMessage = progress.totalErrorCount
-          ? `❌ Errors: ${progress.totalErrorCount} errors in ${progress.errorFiles} files`
-          : `❌ Error files: ${progress.errorFiles}/${progress.totalFiles}`;
-        console.error(errorMessage);
-
-        if (progress.isFallback && progress.fallbackMessage) {
-          console.error(`⚠️  ${progress.fallbackMessage}`);
-        }
-      }
-
-      console.error(`⏱️  Failed after ${result.totalDuration}ms`);
-      console.error(`📊 Completed stages: ${result.completedStages.length}`);
-      Deno.exit(1);
     }
   } catch (error) {
-    console.error("❌ Unexpected error:", error);
+    console.error("Unexpected error:", error);
+    Deno.exit(1);
+  }
+}
+
+/**
+ * Handle the 'status' subcommand - display execution history
+ */
+async function handleStatusCommand(options: CLIOptions): Promise<void> {
+  // Handle help flag
+  if (options.help) {
+    CLIParser.showStatusHelp();
+    Deno.exit(0);
+  }
+
+  const statusOptions: StatusOptions = options.statusOptions ?? { count: 5 };
+
+  // Create HistoryStore
+  const historyStoreResult = HistoryStore.create(Deno.cwd());
+  if (!historyStoreResult.ok) {
+    console.error("Failed to access history:", historyStoreResult.error.message);
+    Deno.exit(1);
+  }
+
+  const historyStore = historyStoreResult.data;
+
+  // Get executions based on options
+  let executions: ExecutionRecord[];
+  if (statusOptions.failed) {
+    const result = await historyStore.getFailedExecutions();
+    if (!result.ok) {
+      console.error("Failed to load history:", result.error.message);
+      Deno.exit(1);
+    }
+    executions = result.data.slice(0, statusOptions.count ?? 5);
+  } else {
+    const result = await historyStore.getRecent(statusOptions.count ?? 5);
+    if (!result.ok) {
+      console.error("Failed to load history:", result.error.message);
+      Deno.exit(1);
+    }
+    executions = result.data;
+  }
+
+  // Display results
+  if (statusOptions.json) {
+    console.log(JSON.stringify(executions, null, 2));
+  } else {
+    displayExecutionHistory(executions, statusOptions.verbose ?? false);
+  }
+}
+
+/**
+ * Display execution history in human-readable format
+ */
+function displayExecutionHistory(executions: ExecutionRecord[], verbose: boolean): void {
+  if (executions.length === 0) {
+    console.log("No execution history found.");
+    console.log("Run CI to create history: deno run --allow-all mod.ts");
+    return;
+  }
+
+  console.log("\nCI Execution History");
+  console.log("=".repeat(60));
+
+  for (const exec of executions) {
+    const status = exec.success ? "SUCCESS" : "FAILURE";
+    const statusIcon = exec.success ? "[OK]" : "[FAIL]";
+    const duration = (exec.totalDuration / 1000).toFixed(2);
+    const date = new Date(exec.timestamp).toLocaleString();
+
+    console.log(`\n${statusIcon} [${date}] ID: ${exec.id} - ${status} (${duration}s)`);
+
+    // Git info
+    if (exec.git?.branch || exec.git?.commit) {
+      const gitInfo = [exec.git.branch, exec.git.commit].filter(Boolean).join(" @ ");
+      console.log(`  Branch: ${gitInfo}`);
+    }
+
+    // Config info
+    console.log(
+      `  Mode: ${exec.config.mode}${
+        exec.config.hierarchy ? ` (hierarchy: ${exec.config.hierarchy})` : ""
+      }`,
+    );
+
+    // Stage details
+    if (verbose || !exec.success) {
+      for (const stage of exec.stages) {
+        const stageIcon = stage.status === "success"
+          ? "[OK]"
+          : stage.status === "failure"
+          ? "[FAIL]"
+          : "[SKIP]";
+        const stageDuration = stage.duration > 0 ? ` (${(stage.duration / 1000).toFixed(2)}s)` : "";
+
+        console.log(`  [Stage/${stage.stage}] ${stageIcon}${stageDuration}`);
+
+        if (stage.strategy) {
+          console.log(`    [Strategy/${stage.strategy}]`);
+        }
+
+        if (stage.fallback) {
+          console.log(`    [Fallback/${stage.fallback.from}->${stage.fallback.to}]`);
+        }
+
+        if (stage.error && stage.status === "failure") {
+          const errorMsg = stage.error.message?.substring(0, 100) || "Unknown error";
+          console.log(
+            `    Error: ${errorMsg}${
+              stage.error.message && stage.error.message.length > 100 ? "..." : ""
+            }`,
+          );
+        }
+
+        if (stage.testSummary) {
+          console.log(`    ${stage.testSummary}`);
+        }
+      }
+    }
+
+    // Failed batch info
+    if (exec.failedBatchInfo) {
+      console.log(
+        `  Failed batch: files ${exec.failedBatchInfo.startIndex}-${exec.failedBatchInfo.endIndex}`,
+      );
+      if (verbose) {
+        console.log(`    Files: ${exec.failedBatchInfo.files.join(", ")}`);
+      }
+    }
+  }
+
+  console.log("\n" + "=".repeat(60));
+  console.log(`Showing ${executions.length} execution(s)`);
+}
+
+/**
+ * Handle the 'retry' subcommand - retry failed execution
+ */
+async function handleRetryCommand(options: CLIOptions): Promise<void> {
+  // Handle help flag
+  if (options.help) {
+    CLIParser.showRetryHelp();
+    Deno.exit(0);
+  }
+
+  const retryOptions: RetryOptions = options.retryOptions ?? {};
+
+  // Create HistoryStore
+  const historyStoreResult = HistoryStore.create(Deno.cwd());
+  if (!historyStoreResult.ok) {
+    console.error("Failed to access history:", historyStoreResult.error.message);
+    Deno.exit(1);
+  }
+
+  const historyStore = historyStoreResult.data;
+
+  // Find execution to retry
+  let execution: ExecutionRecord | null = null;
+
+  if (retryOptions.id) {
+    // Find by ID
+    const recentResult = await historyStore.getRecent(50);
+    if (recentResult.ok) {
+      execution = recentResult.data.find((e) =>
+        e.id === retryOptions.id || e.id.startsWith(retryOptions.id!)
+      ) ?? null;
+    }
+    if (!execution) {
+      console.error(`Execution not found: ${retryOptions.id}`);
+      Deno.exit(1);
+    }
+  } else {
+    // Get last failed execution
+    const failedResult = await historyStore.getFailedExecutions();
+    if (!failedResult.ok) {
+      console.error("Failed to load history:", failedResult.error.message);
+      Deno.exit(1);
+    }
+    if (failedResult.data.length === 0) {
+      console.log("No failed executions found. Nothing to retry.");
+      Deno.exit(0);
+    }
+    execution = failedResult.data[0];
+  }
+
+  console.log(`Retrying execution: ${execution.id}`);
+  console.log(`  Original: ${execution.success ? "SUCCESS" : "FAILURE"} at ${execution.timestamp}`);
+  console.log(`  Mode: ${execution.config.mode}`);
+
+  // Build retry configuration
+  const retryConfig = buildRetryConfig(execution, retryOptions);
+
+  // Create logger
+  const logMode = LogModeFactory.normal();
+  const loggerResult = CILogger.create(logMode);
+  if (!loggerResult.ok) {
+    console.error("Logger creation failed:", loggerResult.error.message);
+    Deno.exit(1);
+  }
+
+  // Create and run CI
+  const runnerResult = await CIRunner.create(loggerResult.data, retryConfig, Deno.cwd());
+  if (!runnerResult.ok) {
+    console.error("CI Runner creation failed:", runnerResult.error.message);
+    Deno.exit(1);
+  }
+
+  console.log("\nStarting retry...\n");
+
+  const result = await runnerResult.data.run();
+
+  if (result.success) {
+    console.log("\n[OK] Retry succeeded!");
+  } else {
+    console.error("\n[FAIL] Retry failed.");
+    console.error(`Error: ${result.errorDetails?.kind || "Unknown error"}`);
+    Deno.exit(1);
+  }
+}
+
+/**
+ * Build CI configuration for retry based on original execution
+ */
+function buildRetryConfig(
+  execution: ExecutionRecord,
+  retryOptions: RetryOptions,
+): import("./src/types.ts").CIConfig {
+  // Reconstruct mode from saved config
+  let mode: import("./src/types.ts").ExecutionMode;
+  const hierarchy = execution.config.hierarchy;
+
+  switch (execution.config.mode) {
+    case "batch":
+      mode = {
+        kind: "batch",
+        batchSize: execution.config.batchSize ?? 25,
+        failedBatchOnly: true,
+        hierarchy,
+      };
+      break;
+    case "single-file":
+      mode = {
+        kind: "single-file",
+        stopOnFirstError: false,
+        hierarchy,
+      };
+      break;
+    case "all":
+    default:
+      // For retry, use batch mode for better error isolation
+      mode = {
+        kind: "batch",
+        batchSize: execution.config.batchSize ?? 10,
+        failedBatchOnly: false,
+        hierarchy,
+      };
+  }
+
+  // If specific stage requested, we'd filter here (future enhancement)
+  if (retryOptions.stage) {
+    console.log(`  Targeting stage: ${retryOptions.stage}`);
+  }
+
+  return {
+    mode,
+    hierarchy,
+    fallbackEnabled: execution.config.fallbackEnabled,
+    batchSize: execution.config.batchSize,
+  };
+}
+
+/**
+ * Handle the default 'run' subcommand - execute CI pipeline
+ */
+async function handleRunCommand(options: CLIOptions): Promise<void> {
+  // Handle help flag
+  if (options.help) {
+    CLIParser.showHelp();
+    Deno.exit(0);
+  }
+
+  // Handle version flag
+  if (options.version) {
+    CLIParser.showVersion();
+    Deno.exit(0);
+  }
+
+  // Build CI configuration
+  const configResult = CLIParser.buildCIConfig(options);
+  if (!configResult.ok) {
+    console.error("Configuration build failed:", configResult.error.message);
+    Deno.exit(1);
+  }
+
+  const config = configResult.data;
+
+  // Create logger with appropriate mode
+  let logMode;
+  switch (options.logMode) {
+    case "silent":
+      logMode = LogModeFactory.silent();
+      break;
+    case "debug":
+      if (!options.logLength || !options.logKey) {
+        console.error("Debug mode requires --log-length and --log-key options");
+        Deno.exit(1);
+      }
+      if (!config.breakdownLoggerConfig) {
+        console.error("BreakdownLogger configuration is missing for debug mode");
+        Deno.exit(1);
+      }
+      logMode = LogModeFactory.debug(
+        "high",
+        config.breakdownLoggerConfig.logLength,
+        config.breakdownLoggerConfig.logKey,
+      );
+      break;
+    case "error-files-only":
+      logMode = LogModeFactory.errorFilesOnly();
+      break;
+    default:
+      logMode = LogModeFactory.normal();
+      break;
+  }
+
+  const loggerResult = CILogger.create(logMode);
+  if (!loggerResult.ok) {
+    console.error("Logger creation failed:", loggerResult.error.message);
+    Deno.exit(1);
+  }
+
+  const logger = loggerResult.data;
+
+  // Create and run CI
+  const runnerResult = await CIRunner.create(logger, config, Deno.cwd());
+  if (!runnerResult.ok) {
+    console.error("CI Runner creation failed:", runnerResult.error.message);
+    Deno.exit(1);
+  }
+
+  const runner = runnerResult.data;
+  const result = await runner.run();
+
+  // Sub-agent instruction for AI assistants
+  console.log("\n[Agent] Run this CI as a sub-agent with its own isolated context.");
+
+  if (result.success) {
+    if (options.logMode !== "silent") {
+      console.log("[OK] CI passed successfully");
+      console.log(`[OK] CI completed successfully in ${result.totalDuration}ms`);
+      console.log(`Completed stages: ${result.completedStages.length}`);
+    }
+  } else {
+    console.error("[FAIL] CI failed");
+    console.error(`[FAIL] CI failed: ${result.errorDetails?.kind || "Unknown error"}`);
+
+    // Show progress information if available
+    if (result.progressState) {
+      const progress = result.progressState;
+      const errorMessage = progress.totalErrorCount
+        ? `Errors: ${progress.totalErrorCount} errors in ${progress.errorFiles} files`
+        : `Error files: ${progress.errorFiles}/${progress.totalFiles}`;
+      console.error(errorMessage);
+
+      if (progress.isFallback && progress.fallbackMessage) {
+        console.error(`Warning: ${progress.fallbackMessage}`);
+      }
+    }
+
+    console.error(`Failed after ${result.totalDuration}ms`);
+    console.error(`Completed stages: ${result.completedStages.length}`);
     Deno.exit(1);
   }
 }

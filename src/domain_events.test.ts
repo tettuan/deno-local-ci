@@ -4,7 +4,7 @@
  * Domain events and event bus functionality tests
  */
 
-import { assertEquals, assertExists } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals, assertExists } from "@std/assert";
 import { type CIDomainEvent, CIEventBus, ExecutionIdFactory } from "../src/domain_events.ts";
 import { TimestampFactory } from "../src/compressed_theorem_types.ts";
 
@@ -44,7 +44,7 @@ Deno.test("CIEventBus - basic event subscription and publishing", async () => {
       eventReceived = true;
     },
     "test-handler",
-    "test-context",
+    { context: "test-context" },
   );
 
   // Publish an event
@@ -72,7 +72,7 @@ Deno.test("CIEventBus - multiple handlers for same event", async () => {
       receivedEvents.push(event);
     },
     "handler-1",
-    "context-1",
+    { context: "context-1" },
   );
 
   eventBus.subscribe(
@@ -81,7 +81,7 @@ Deno.test("CIEventBus - multiple handlers for same event", async () => {
       receivedEvents.push(event);
     },
     "handler-2",
-    "context-2",
+    { context: "context-2" },
   );
 
   // Publish event
@@ -117,8 +117,7 @@ Deno.test("CIEventBus - boundary guarantee with timeout", async () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
     },
     "fast-handler",
-    "test-context",
-    50, // 50ms timeout
+    { context: "test-context", timeout: 50 }, // 50ms timeout
   );
 
   const testEvent: CIDomainEvent = {
@@ -140,15 +139,15 @@ Deno.test("CIEventBus - handler count tracking", () => {
 
   assertEquals(eventBus.getHandlerCount(), 0);
 
-  eventBus.subscribe("StageStarted", () => {}, "handler-1", "context-1");
+  eventBus.subscribe("StageStarted", () => {}, "handler-1", { context: "context-1" });
   assertEquals(eventBus.getHandlerCount("StageStarted"), 1);
   assertEquals(eventBus.getHandlerCount(), 1);
 
-  eventBus.subscribe("StageStarted", () => {}, "handler-2", "context-1");
+  eventBus.subscribe("StageStarted", () => {}, "handler-2", { context: "context-1" });
   assertEquals(eventBus.getHandlerCount("StageStarted"), 2);
   assertEquals(eventBus.getHandlerCount(), 2);
 
-  eventBus.subscribe("StageCompleted", () => {}, "handler-3", "context-2");
+  eventBus.subscribe("StageCompleted", () => {}, "handler-3", { context: "context-2" });
   assertEquals(eventBus.getHandlerCount("StageCompleted"), 1);
   assertEquals(eventBus.getHandlerCount(), 3);
 });

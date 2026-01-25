@@ -5,7 +5,7 @@
  * Testing execution strategy determination, fallback processing, and error classification
  */
 
-import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals } from "@std/assert";
 import {
   CIPipelineOrchestrator,
   ErrorClassificationService,
@@ -200,7 +200,7 @@ Deno.test("ErrorClassificationService - classify JSR error", () => {
   assertEquals(error.kind, "JSRError");
 });
 
-// TODO: Implement STAGE_ORDER and getNextStage in CIPipelineOrchestrator
+// TODO(@tettuan): Implement STAGE_ORDER and getNextStage in CIPipelineOrchestrator
 /*
 Deno.test("CIPipelineOrchestrator - stage order", () => {
   const expectedOrder = [

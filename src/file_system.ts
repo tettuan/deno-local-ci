@@ -6,7 +6,8 @@
  */
 
 import { basename, dirname, join, relative, resolve } from "@std/path";
-import { createError, Result, TestFileInfo, ValidationError } from "./types.ts";
+import { createError } from "./types.ts";
+import type { Result, TestFileInfo, ValidationError } from "./types.ts";
 import { FileClassificationService } from "./domain_services.ts";
 
 /**
