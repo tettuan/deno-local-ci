@@ -411,10 +411,11 @@ async function handleRetryCommand(options: CLIOptions): Promise<void> {
 
   if (retryOptions.id) {
     // Find by ID
+    const targetId = retryOptions.id;
     const recentResult = await historyStore.getRecent(50);
     if (recentResult.ok) {
       execution = recentResult.data.find((e) =>
-        e.id === retryOptions.id || e.id.startsWith(retryOptions.id!)
+        e.id === targetId || e.id.startsWith(targetId)
       ) ?? null;
     }
     if (!execution) {
