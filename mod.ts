@@ -414,9 +414,8 @@ async function handleRetryCommand(options: CLIOptions): Promise<void> {
     const targetId = retryOptions.id;
     const recentResult = await historyStore.getRecent(50);
     if (recentResult.ok) {
-      execution = recentResult.data.find((e) =>
-        e.id === targetId || e.id.startsWith(targetId)
-      ) ?? null;
+      execution = recentResult.data.find((e) => e.id === targetId || e.id.startsWith(targetId)) ??
+        null;
     }
     if (!execution) {
       console.error(`Execution not found: ${retryOptions.id}`);
