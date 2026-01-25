@@ -82,7 +82,34 @@
   "lint": {
     "include": ["src/", "*.ts"],
     "rules": {
-      "tags": ["recommended"]
+      "tags": ["recommended"],
+      "include": [
+        "ban-untagged-todo",
+        "camelcase",
+        "default-param-last",
+        "eqeqeq",
+        "explicit-function-return-type",
+        "explicit-module-boundary-types",
+        "no-console",
+        "no-const-assign",
+        "no-eval",
+        "no-external-import",
+        "no-implicit-declare-namespace-export",
+        "no-non-null-asserted-optional-chain",
+        "no-non-null-assertion",
+        "no-self-compare",
+        "no-sparse-arrays",
+        "no-sync-fn-in-async-fn",
+        "no-throw-literal",
+        "no-undef",
+        "prefer-ascii",
+        "prefer-primordials",
+        "single-var-declarator",
+        "verbatim-module-syntax"
+      ],
+      "exclude": [
+        "no-console"
+      ]
     }
   },
   "compilerOptions": {

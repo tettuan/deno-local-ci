@@ -8,27 +8,59 @@ A comprehensive TypeScript-based CI runner for Deno projects with robust testing
 linting, and type checking capabilities. Built with Domain-Driven Design principles and strong type
 safety.
 
-## ✨ Features
+## Why @aidevtool/ci?
 
-- 🔄 **Complete CI Pipeline**: Type check → JSR check → Test → Lint → Format with stage-based
-  progress tracking
-- 🎯 **Multiple Execution Modes**: Single-file, batch, and all modes for different project needs
-  with intelligent fallback
-- 🛡️ **Type Safety**: Full TypeScript support with strict type checking and comprehensive error
+### The Problem
+
+- **Late failure detection**: CI failures are discovered only after pushing to GitHub Actions,
+  slowing down the development cycle
+- **Difficult debugging in large projects**: When `deno test` fails with hundreds of test files, it's
+  hard to isolate which file caused the problem
+- **Overwhelming output**: Standard Deno commands produce verbose output, making it difficult to
+  pinpoint the actual error location
+- **Repetitive manual commands**: Running `deno check && deno test && deno lint && deno fmt --check`
+  manually is tedious and error-prone
+
+### The Solution
+
+@aidevtool/ci addresses these challenges:
+
+- **Local CI reproduction**: Run the same CI pipeline locally before pushing, catching failures early
+- **Intelligent fallback**: When all-at-once execution fails, automatically switches to batch mode,
+  then single-file mode to isolate the exact problem
+- **Hierarchy targeting**: Check only the directories you're working on (e.g., `src/components/`)
+  instead of the entire project
+- **Selective debug output**: BreakdownLogger integration lets you filter debug output by domain
+  (AUTH, DB, API) and verbosity level (W/M/L)
+- **Structured error reporting**: Errors are classified by type (TypeCheck, Test, Lint, Format) with
+  clear, actionable messages
+
+### Who Should Use This?
+
+- **Deno developers** who want faster feedback loops before pushing code
+- **Teams with large codebases** that need efficient partial CI execution
+- **Projects publishing to JSR** that require compatibility validation
+- **Anyone tired of** waiting for GitHub Actions to tell them what's broken
+
+## Features
+
+- **Complete CI Pipeline**: Type check → JSR check → Test → Lint → Format with stage-based progress
+  tracking
+- **Multiple Execution Modes**: Single-file, batch, and all modes for different project needs with
+  intelligent fallback
+- **Type Safety**: Full TypeScript support with strict type checking and comprehensive error
   reporting
-- 📊 **Enhanced Progress Display**: Stage-based progress tracking (Stage X/Y) with accurate file
-  counts and timing
-- ⚙️ **Flexible Configuration**: Customizable batch sizes, log modes, and directory targeting
-  options
-- 🔧 **Smart Error Handling**: Structured error categorization with automatic fallback strategies
-- 📝 **Advanced Logging**: BreakdownLogger integration for selective debug output and pinpoint
-  analysis
-- ⚡ **Performance Optimized**: Memory-efficient processing with intelligent batching for large test
+- **Enhanced Progress Display**: Stage-based progress tracking (Stage X/Y) with accurate file counts
+  and timing
+- **Flexible Configuration**: Customizable batch sizes, log modes, and directory targeting options
+- **Smart Error Handling**: Structured error categorization with automatic fallback strategies
+- **Advanced Logging**: BreakdownLogger integration for selective debug output and pinpoint analysis
+- **Performance Optimized**: Memory-efficient processing with intelligent batching for large test
   suites
-- 🏗️ **Domain-Driven Design**: Clean architecture documented in `docs/architecture/` with modular
+- **Domain-Driven Design**: Clean architecture documented in `docs/architecture/` with modular
   components
 
-## 🚀 Installation
+## Installation
 
 ### Using JSR (Recommended)
 
@@ -46,7 +78,7 @@ deno add @aidevtool/ci
 deno run --allow-read --allow-write --allow-run --allow-env https://raw.githubusercontent.com/tettuan/deno-local-ci/main/mod.ts
 ```
 
-## 📖 Usage
+## Usage
 
 ### Command Line Interface (Main Use Case)
 
@@ -155,7 +187,7 @@ if (parseResult.ok) {
       if (runnerResult.ok) {
         const runner = runnerResult.data;
         const result = await runner.run();
-        console.log(result.success ? "✅ CI passed" : "❌ CI failed");
+        console.log(result.success ? "CI passed" : "CI failed");
       }
     }
   }
@@ -193,7 +225,7 @@ const projectFiles = await discovery.discoverProjectFiles("./src");
 console.log(`Found ${projectFiles.testFiles.length} test files`);
 ```
 
-## 🔧 Command Line Options
+## Command Line Options
 
 | Option                       | Description                                                    | Default Value     | Example                     |
 | ---------------------------- | -------------------------------------------------------------- | ----------------- | --------------------------- |
@@ -245,7 +277,7 @@ deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci tests/ --mode single-file --log-mode debug --log-key TEST --log-length M
 ```
 
-## 🎯 CI Pipeline Stages
+## CI Pipeline Stages
 
 The CI runner executes the following stages in order:
 
@@ -258,7 +290,7 @@ The CI runner executes the following stages in order:
 Each stage must pass before proceeding to the next. On failure, the pipeline stops and reports
 detailed error information.
 
-## 🗂️ Directory Hierarchy Targeting
+## Directory Hierarchy Targeting
 
 Efficient development for large projects is possible by targeting specific directory hierarchies for
 CI execution.
@@ -278,7 +310,7 @@ deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --
 
 ### Behavior When Hierarchy is Specified
 
-#### ✅ Stages That Will Execute
+#### Stages That Will Execute
 
 1. **Type Check**: `deno check <hierarchy>/` - Type check TypeScript files within specified
    hierarchy
@@ -287,7 +319,7 @@ deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --
 4. **Lint**: `deno lint <hierarchy>/` - Lint files within specified hierarchy
 5. **Format**: `deno fmt --check <hierarchy>/` - Format check files within specified hierarchy
 
-#### 🎯 Target Files (When Hierarchy is Specified)
+#### Target Files (When Hierarchy is Specified)
 
 - **TypeScript files**: `<hierarchy>/**/*.ts`, `<hierarchy>/**/*.tsx`, `<hierarchy>/**/*.d.ts`
 - **Test files**: `<hierarchy>/**/*_test.ts`, `<hierarchy>/**/*.test.ts`
@@ -327,11 +359,11 @@ deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci te
 
 ### Benefits of Hierarchy Specification
 
-- **🚀 Fast Execution**: Accelerate development cycle by checking only necessary parts
-- **🎯 Focused Development**: Concentrated verification on modules being worked on
-- **📊 Efficient Debugging**: Identify problematic hierarchies and fix them precisely
-- **⚡ CI Optimization**: Reduce CI time by checking only changed hierarchies
-- **🔍 Gradual Verification**: Improve quality through gradual code verification
+- **Fast Execution**: Accelerate development cycle by checking only necessary parts
+- **Focused Development**: Concentrated verification on modules being worked on
+- **Efficient Debugging**: Identify problematic hierarchies and fix them precisely
+- **CI Optimization**: Reduce CI time by checking only changed hierarchies
+- **Gradual Verification**: Improve quality through gradual code verification
 
 ### Important Notes
 
@@ -341,7 +373,7 @@ deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci te
 - **Fallback Inheritance**: Execution mode fallback functionality continues to work with hierarchy
   specification
 
-## 📊 Execution Mode Details
+## Execution Mode Details
 
 ### All Mode (`--mode all`) - Default
 
@@ -383,7 +415,7 @@ deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --mode single-file
 ```
 
-## 🔍 Log Mode Details
+## Log Mode Details
 
 ### Normal Mode (`--log-mode normal`) - Default
 
@@ -438,7 +470,7 @@ deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci \
   --log-mode debug --log-key ANALYSIS --log-length L
 ```
 
-#### 🔬 BreakdownLogger Integration Strategy
+#### BreakdownLogger Integration Strategy
 
 BreakdownLogger enables detailed flow tracking with timestamp precision. By embedding comprehensive
 debug information in tests and using LOG_KEY and LOG_LENGTH for selective output, you can pinpoint
@@ -452,7 +484,7 @@ execution.
 - **Granular Control**: Adjust detail level with LOG_LENGTH (W/M/L)
 - **Pinpoint Analysis**: Combine test filtering + KEY filtering + LENGTH control
 
-##### 🧪 Implementation: Embedding Rich Debug Information
+##### Implementation: Embedding Rich Debug Information
 
 **Step 1: Add comprehensive logging to your tests**
 
@@ -489,7 +521,7 @@ Deno.test("User authentication workflow", async () => {
 });
 ```
 
-##### 🔄 Step 2: Strategic Filtering During Execution
+##### Step 2: Strategic Filtering During Execution
 
 **Problem**: Rich debug information in all tests generates overwhelming output. **Solution**: Use
 LOG_KEY and LOG_LENGTH to selectively filter what you need.
@@ -526,7 +558,7 @@ deno run --allow-all jsr:@aidevtool/ci tests/user_auth_test.ts \
   --log-mode debug --log-key AUTH --log-length L
 ```
 
-##### 💡 Step 3: Design Effective LOG_KEYs
+##### Step 3: Design Effective LOG_KEYs
 
 **Use domain-based keys with appropriate granularity for efficient filtering:**
 
@@ -544,13 +576,13 @@ SECURITY # Security operations (encryption, access control)
 **Implementation Example**
 
 ```typescript
-// ✅ Good: Use domain-based keys
+// Good: Use domain-based keys
 logger.log("LOGIN_ATTEMPT_START", "..."); // Controlled by AUTH key
 logger.log("PASSWORD_VALIDATION", "..."); // Controlled by AUTH key
 logger.log("SESSION_CREATION", "..."); // Controlled by AUTH key
 logger.log("JWT_GENERATION_START", "..."); // Controlled by AUTH key
 
-// ✅ Good: Database operations under DB key
+// Good: Database operations under DB key
 logger.log("TRANSACTION_BEGIN", "..."); // Controlled by DB key
 logger.log("QUERY_OPTIMIZATION", "..."); // Controlled by DB key
 logger.log("INDEX_LOOKUP", "..."); // Controlled by DB key
@@ -559,10 +591,10 @@ logger.log("INDEX_LOOKUP", "..."); // Controlled by DB key
 **Avoid Over-Granular Keys**
 
 ```bash
-# ❌ Too granular (unnecessary)
+# Too granular (unnecessary)
 AUTH_LOGIN, AUTH_JWT, AUTH_SESSION, AUTH_PASSWORD
 
-# ✅ Optimal granularity
+# Optimal granularity
 AUTH    # Covers all authentication concerns
 ```
 
@@ -574,7 +606,7 @@ AUTH    # Covers all authentication concerns
 | `M`    | Problem identification | `AUTH + M`     | Key checkpoints        |
 | `L`    | Detailed analysis      | `DB + L`       | Full operation details |
 
-##### 🎯 Summary: Selective Debug Output Strategy
+##### Summary: Selective Debug Output Strategy
 
 **Core Value**: Embed comprehensive debug information in all tests, then use LOG_KEY and LOG_LENGTH
 to selectively filter output during CI execution. This approach enables pinpoint problem
@@ -589,7 +621,7 @@ efficient.
 - **Pinpoint Analysis**: Combine test filtering + KEY filtering + LENGTH control
 - **Optimal Granularity**: Domain-based keys avoid over-engineering
 
-## 🌍 Environment Variables
+## Environment Variables
 
 The following environment variables can be used during CI execution:
 
@@ -608,7 +640,7 @@ export CI_LOCAL_LENGTH=M
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --log-mode debug --log-key CI_LOCAL --log-length M
 ```
 
-## ⚡ Practical Usage Patterns
+## Practical Usage Patterns
 
 ### Development Workflow
 
@@ -671,7 +703,7 @@ deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci \
   --stop-on-first-error --log-mode debug --log-key FIRST_ERROR --log-length L
 ```
 
-## 🏗️ Architecture
+## Architecture
 
 The CI runner follows Domain-Driven Design principles with clean separation of concerns. For
 detailed architectural documentation, see
@@ -705,7 +737,7 @@ detailed architectural documentation, see
 - **Enhanced Error Boundaries**: Improved error isolation and recovery strategies
 - **Selective Debug Output**: BreakdownLogger integration for targeted debugging workflows
 
-## ⚡ Performance Features
+## Performance Features
 
 ### Intelligent Batching
 
@@ -725,7 +757,7 @@ detailed architectural documentation, see
 - **Immediate Error Feedback**: Get error details as soon as they're detected
 - **Stage-by-Stage Results**: Clear visibility into each pipeline stage
 
-## 🛡️ Error Handling
+## Error Handling
 
 ### Error Classification
 
@@ -749,7 +781,7 @@ All Mode → Batch Mode → Single-File Mode → Detailed Error Report
 - Aggregated error summaries
 - Actionable recommendations for fixes
 
-## 🧪 Testing & Quality
+## Testing and Quality
 
 This package includes comprehensive test coverage:
 
@@ -765,7 +797,7 @@ Run tests locally:
 deno test --allow-read --allow-write --allow-run --allow-env
 ```
 
-## 📋 Development Workflow
+## Development Workflow
 
 ### Local Development
 
@@ -804,7 +836,7 @@ deno task check
 | `lint`      | `deno task lint`      | Lint code                 |
 | `check`     | `deno task check`     | Type check                |
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! Please follow these steps:
 
@@ -824,11 +856,11 @@ We welcome contributions! Please follow these steps:
 - Update documentation for new features
 - Ensure all CI stages pass
 
-## 📄 License
+## License
 
 MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🔗 Links
+## Links
 
 - **[JSR Package](https://jsr.io/@aidevtool/ci)** - Official package registry
 - **[GitHub Repository](https://github.com/tettuan/deno-local-ci)** - Source code and issues
@@ -838,4 +870,4 @@ MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-**Built with ❤️ for the Deno community**
+**Built for the Deno community**
