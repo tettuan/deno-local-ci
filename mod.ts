@@ -593,6 +593,9 @@ async function handleRunCommand(options: CLIOptions): Promise<void> {
   const runner = runnerResult.data;
   const result = await runner.run();
 
+  // Sub-agent instruction for AI assistants
+  console.log("\n[Agent] Run this CI as a sub-agent with its own isolated context.");
+
   if (result.success) {
     if (options.logMode !== "silent") {
       console.log("[OK] CI passed successfully");
