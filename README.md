@@ -14,8 +14,8 @@ safety.
 
 - **Late failure detection**: CI failures are discovered only after pushing to GitHub Actions,
   slowing down the development cycle
-- **Difficult debugging in large projects**: When `deno test` fails with hundreds of test files, it's
-  hard to isolate which file caused the problem
+- **Difficult debugging in large projects**: When `deno test` fails with hundreds of test files,
+  it's hard to isolate which file caused the problem
 - **Overwhelming output**: Standard Deno commands produce verbose output, making it difficult to
   pinpoint the actual error location
 - **Repetitive manual commands**: Running `deno check && deno test && deno lint && deno fmt --check`
@@ -25,7 +25,8 @@ safety.
 
 @aidevtool/ci addresses these challenges:
 
-- **Local CI reproduction**: Run the same CI pipeline locally before pushing, catching failures early
+- **Local CI reproduction**: Run the same CI pipeline locally before pushing, catching failures
+  early
 - **Intelligent fallback**: When all-at-once execution fails, automatically switches to batch mode,
   then single-file mode to isolate the exact problem
 - **Hierarchy targeting**: Check only the directories you're working on (e.g., `src/components/`)
