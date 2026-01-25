@@ -145,7 +145,8 @@ benchmarks/results/
 .env*
 .deno/
 .agent/
-.claude/
+.claude/*
+!.claude/skills/
 scripts/
 
 # temp
