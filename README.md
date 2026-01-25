@@ -57,8 +57,8 @@ safety.
 - **Advanced Logging**: BreakdownLogger integration for selective debug output and pinpoint analysis
 - **Performance Optimized**: Memory-efficient processing with intelligent batching for large test
   suites
-- **Domain-Driven Design**: Clean architecture documented in `docs/architecture/` with modular
-  components
+- **Domain-Driven Design**: Clean architecture documented in `docs/architecture/system.md` with
+  modular components
 
 ## Installation
 
