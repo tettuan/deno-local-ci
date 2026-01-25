@@ -151,4 +151,5 @@ scripts/
 
 # temp
 docs/development/
+tmp/
 
