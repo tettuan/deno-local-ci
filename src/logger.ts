@@ -545,6 +545,8 @@ export class CILogger {
 
   private getStageName(stage: CIStage): string {
     switch (stage.kind) {
+      case "git-status-check":
+        return "Git Status Check";
       case "lockfile-init":
         return "Lockfile Initialization";
       case "type-check":
@@ -562,6 +564,8 @@ export class CILogger {
 
   private getCommandInfo(stage: CIStage): string | null {
     switch (stage.kind) {
+      case "git-status-check":
+        return "git status --porcelain";
       case "lockfile-init":
         return "deno cache deps.ts";
       case "type-check":

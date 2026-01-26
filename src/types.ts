@@ -126,6 +126,7 @@ export type ExecutionMode =
 
 // === CI Stage and Error Type Definitions ===
 export type CIStage =
+  | { kind: "git-status-check" }
   | { kind: "lockfile-init"; action: "regenerate" }
   | { kind: "type-check"; files: string[]; optimized: boolean; hierarchy: string | null }
   | { kind: "jsr-check"; dryRun: boolean; allowDirty: boolean; hierarchy: string | null }

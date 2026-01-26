@@ -262,20 +262,20 @@ Deno.test("CIPipelineOrchestrator - get stages with file info", () => {
 
   const stages = CIPipelineOrchestrator.getStages(config, fileInfo);
 
-  // Should include lockfile-init, type-check, jsr-check, test-execution, lint-check, format-check
-  assertEquals(stages.length, 6);
+  // Should include git-status-check, lockfile-init, type-check, test-execution, lint-check, format-check, jsr-check
+  assertEquals(stages.length, 7);
+
+  // Check git-status-check stage (first)
+  assertEquals(stages[0].kind, "git-status-check");
 
   // Check lockfile stage
-  assertEquals(stages[0].kind, "lockfile-init");
+  assertEquals(stages[1].kind, "lockfile-init");
 
   // Check type-check stage
-  assertEquals(stages[1].kind, "type-check");
-  if (stages[1].kind === "type-check") {
-    assertEquals(stages[1].files, fileInfo.typeCheckFiles);
+  assertEquals(stages[2].kind, "type-check");
+  if (stages[2].kind === "type-check") {
+    assertEquals(stages[2].files, fileInfo.typeCheckFiles);
   }
-
-  // Check JSR stage (should be included when hierarchy is null)
-  assertEquals(stages[2].kind, "jsr-check");
 
   // Check test-execution stage
   assertEquals(stages[3].kind, "test-execution");
@@ -285,6 +285,9 @@ Deno.test("CIPipelineOrchestrator - get stages with file info", () => {
 
   // Check format stage
   assertEquals(stages[5].kind, "format-check");
+
+  // Check JSR stage (last, should be included when hierarchy is null)
+  assertEquals(stages[6].kind, "jsr-check");
 });
 
 Deno.test("FileClassificationService - classify files correctly", () => {

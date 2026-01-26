@@ -40,7 +40,7 @@ import {
   StageInternalFallbackService,
 } from "./domain_services.ts";
 
-import { DenoCommandRunner, extractTestSummaryLine } from "./process_runner.ts";
+import { DenoCommandRunner, extractTestSummaryLine, GitCommandRunner } from "./process_runner.ts";
 import { ProjectFileDiscovery } from "./file_system.ts";
 import type { CILogger } from "./logger.ts";
 import { createExecutionRecord, HistoryStore } from "./history_store.ts";
@@ -98,6 +98,14 @@ export class CIRunner {
 
   // Track failed batch info for history
   private lastFailedBatchInfo?: FailedBatchInfo;
+
+  // Track uncommitted changes status
+  private hasUncommittedChanges = false;
+  private uncommittedFiles: {
+    staged: string[];
+    unstaged: string[];
+    untracked: string[];
+  } = { staged: [], unstaged: [], untracked: [] };
 
   // Statistics tracking
   private stats: {
@@ -254,6 +262,11 @@ export class CIRunner {
         totalDuration,
         summaryStats,
       );
+
+      // Show commit prompt if uncommitted changes were detected
+      if (this.hasUncommittedChanges) {
+        this.logCommitPrompt();
+      }
 
       // Save execution to history (per system.md Section 5)
       await this.saveExecutionToHistory(true, totalDuration, completedStages);
@@ -574,14 +587,15 @@ export class CIRunner {
    * Get the current stage index from stages array.
    */
   private getCurrentStageIndex(stage: CIStage): number {
-    // Simple implementation - in a real scenario, you'd track stages array
+    // Stage order matching the new pipeline design
     const stageOrder = [
+      "git-status-check",
       "lockfile-init",
       "type-check",
-      "jsr-check",
       "test-execution",
       "lint-check",
       "format-check",
+      "jsr-check",
     ];
     return stageOrder.indexOf(stage.kind);
   }
@@ -591,6 +605,8 @@ export class CIRunner {
    */
   private getStageFileCount(stage: CIStage): number {
     switch (stage.kind) {
+      case "git-status-check":
+        return 1; // One git status operation
       case "lockfile-init":
         return 1; // One lockfile operation
       case "type-check":
@@ -619,6 +635,8 @@ export class CIRunner {
 
     try {
       switch (stage.kind) {
+        case "git-status-check":
+          return await this.executeGitStatusCheck(stage, startTime);
         case "type-check":
           return await this.executeTypeCheck(stage, startTime);
         case "jsr-check":
@@ -714,6 +732,17 @@ export class CIRunner {
   private async executeJSRCheck(stage: CIStage, startTime: number): Promise<StageResult> {
     if (stage.kind !== "jsr-check") {
       throw new Error("Invalid stage type for JSR check");
+    }
+
+    // Skip JSR check if uncommitted changes are detected
+    if (this.hasUncommittedChanges) {
+      const skippedResult: StageResult = {
+        kind: "skipped",
+        stage,
+        reason: "Uncommitted changes detected - JSR check skipped",
+      };
+      this.logger.logStageComplete(skippedResult);
+      return skippedResult;
     }
 
     const result = await DenoCommandRunner.jsrCheck({
@@ -1240,6 +1269,51 @@ export class CIRunner {
     }
   }
 
+  private async executeGitStatusCheck(stage: CIStage, startTime: number): Promise<StageResult> {
+    if (stage.kind !== "git-status-check") {
+      throw new Error("Invalid stage type for git status check");
+    }
+
+    const result = await GitCommandRunner.checkStatus();
+    const duration = performance.now() - startTime;
+
+    if (!result.ok) {
+      // Git command failed - treat as success but log warning
+      this.logger.logInfo("Git status check could not be performed (git not available?)");
+      const successResult: StageResult = {
+        kind: "success",
+        stage,
+        duration,
+      };
+      this.logger.logStageComplete(successResult);
+      return successResult;
+    }
+
+    const gitStatus = result.data;
+
+    if (gitStatus.hasUncommittedChanges) {
+      // Set flag for later use (skip JSR check, show commit prompt at end)
+      this.hasUncommittedChanges = true;
+      this.uncommittedFiles = {
+        staged: gitStatus.stagedFiles,
+        unstaged: gitStatus.unstagedFiles,
+        untracked: gitStatus.untrackedFiles,
+      };
+
+      this.logger.logInfo(
+        "Uncommitted changes detected - will prompt to commit after all checks pass",
+      );
+    }
+
+    const successResult: StageResult = {
+      kind: "success",
+      stage,
+      duration,
+    };
+    this.logger.logStageComplete(successResult);
+    return successResult;
+  }
+
   private async executeLockfileInit(stage: CIStage, startTime: number): Promise<StageResult> {
     if (stage.kind !== "lockfile-init") {
       throw new Error("Invalid stage type for lockfile init");
@@ -1652,6 +1726,8 @@ export class CIRunner {
    */
   private getStageName(stage: CIStage): string {
     switch (stage.kind) {
+      case "git-status-check":
+        return "Git Status Check";
       case "lockfile-init":
         return "Lockfile Initialization";
       case "type-check":
@@ -1729,5 +1805,46 @@ export class CIRunner {
       fallbackMessage: this.progressState.fallbackMessage,
     };
     this.logger.logProgress(progress);
+  }
+
+  /**
+   * Display commit prompt message when uncommitted changes are detected
+   */
+  private logCommitPrompt(): void {
+    const allFiles = [
+      ...this.uncommittedFiles.staged,
+      ...this.uncommittedFiles.unstaged,
+      ...this.uncommittedFiles.untracked,
+    ];
+
+    console.log("");
+    console.log("========================================");
+    console.log("CI PASSED with uncommitted changes");
+    console.log("========================================");
+    console.log("");
+    console.log("The following files have uncommitted changes:");
+
+    // Show staged files
+    for (const file of this.uncommittedFiles.staged) {
+      console.log(`  M  ${file} (staged)`);
+    }
+
+    // Show unstaged files
+    for (const file of this.uncommittedFiles.unstaged) {
+      console.log(`  M  ${file}`);
+    }
+
+    // Show untracked files
+    for (const file of this.uncommittedFiles.untracked) {
+      console.log(`  ?  ${file}`);
+    }
+
+    console.log("");
+    console.log(`Total: ${allFiles.length} file(s)`);
+    console.log("");
+    console.log("Please commit your changes before publishing:");
+    console.log("  git add .");
+    console.log('  git commit -m "your message"');
+    console.log("========================================");
   }
 }

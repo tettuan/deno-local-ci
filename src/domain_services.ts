@@ -49,26 +49,19 @@ export class CIPipelineOrchestrator {
     const stages: CIStage[] = [];
     const hierarchy = config.hierarchy || null;
 
-    // Stage 1: Lockfile initialization (always first)
+    // Stage 1: Git status check (always first to detect uncommitted changes)
+    stages.push({ kind: "git-status-check" });
+
+    // Stage 2: Lockfile initialization
     stages.push({ kind: "lockfile-init", action: "regenerate" });
 
-    // Stage 2: Type check
+    // Stage 3: Type check
     stages.push({
       kind: "type-check",
       files: files.typeCheckFiles,
       optimized: true,
       hierarchy,
     });
-
-    // Stage 3: JSR check (skip if hierarchy is specified per requirements)
-    if (!hierarchy) {
-      stages.push({
-        kind: "jsr-check",
-        dryRun: true,
-        allowDirty: config.allowDirty ?? true,
-        hierarchy,
-      });
-    }
 
     // Stage 4: Test execution
     if (files.testFiles.length > 0) {
@@ -96,6 +89,17 @@ export class CIPipelineOrchestrator {
       checkOnly: true,
       hierarchy,
     });
+
+    // Stage 7: JSR check (last, skip if hierarchy is specified per requirements)
+    // Note: Will be skipped at runtime if uncommitted changes are detected
+    if (!hierarchy) {
+      stages.push({
+        kind: "jsr-check",
+        dryRun: true,
+        allowDirty: config.allowDirty ?? true,
+        hierarchy,
+      });
+    }
 
     return stages;
   }

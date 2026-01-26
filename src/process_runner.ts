@@ -421,3 +421,84 @@ export class DenoCommandRunner {
     return await ProcessRunner.runCommand("deno", ["cache", "--reload", "mod.ts"]);
   }
 }
+
+/**
+ * Git状態チェック結果
+ */
+export interface GitStatusResult {
+  /** 未コミット変更があるかどうか */
+  hasUncommittedChanges: boolean;
+  /** ステージング済みの変更ファイル */
+  stagedFiles: string[];
+  /** 未ステージングの変更ファイル */
+  unstagedFiles: string[];
+  /** 追跡されていないファイル */
+  untrackedFiles: string[];
+  /** 生のgit statusメッセージ */
+  rawOutput: string;
+}
+
+/**
+ * Gitコマンド実行サービス
+ */
+export class GitCommandRunner {
+  private constructor() {}
+
+  /**
+   * git statusを実行してワーキングディレクトリの状態をチェック
+   */
+  static async checkStatus(): Promise<
+    Result<GitStatusResult, ValidationError & { message: string }>
+  > {
+    // git status --porcelain でマシン読み取り可能な形式で取得
+    const result = await ProcessRunner.runCommand("git", ["status", "--porcelain"]);
+
+    if (!result.ok) {
+      return result;
+    }
+
+    const output = result.data.stdout;
+    const lines = output.split("\n").filter((line) => line.trim().length > 0);
+
+    const stagedFiles: string[] = [];
+    const unstagedFiles: string[] = [];
+    const untrackedFiles: string[] = [];
+
+    for (const line of lines) {
+      // git status --porcelain の形式: XY filename
+      // X = ステージング領域の状態, Y = ワーキングツリーの状態
+      const indexStatus = line.charAt(0);
+      const workTreeStatus = line.charAt(1);
+      const filename = line.substring(3).trim();
+
+      if (indexStatus === "?") {
+        // 追跡されていないファイル
+        untrackedFiles.push(filename);
+      } else {
+        // ステージング済みの変更
+        if (indexStatus !== " " && indexStatus !== "?") {
+          stagedFiles.push(filename);
+        }
+        // 未ステージングの変更
+        if (workTreeStatus !== " " && workTreeStatus !== "?") {
+          unstagedFiles.push(filename);
+        }
+      }
+    }
+
+    const hasUncommittedChanges = stagedFiles.length > 0 ||
+      unstagedFiles.length > 0 ||
+      untrackedFiles.length > 0;
+
+    return {
+      ok: true,
+      data: {
+        hasUncommittedChanges,
+        stagedFiles,
+        unstagedFiles,
+        untrackedFiles,
+        rawOutput: output,
+      },
+    };
+  }
+}
