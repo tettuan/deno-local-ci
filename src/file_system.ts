@@ -11,7 +11,19 @@ import type { Result, TestFileInfo, ValidationError } from "./types.ts";
 import { FileClassificationService } from "./domain_services.ts";
 
 /**
- * ファイルシステム操作サービス
+ * Service for file system operations.
+ *
+ * Provides type-safe wrappers for common file system operations
+ * including directory traversal, file existence checks, and path utilities.
+ *
+ * @example
+ * ```typescript
+ * // Check if directory exists
+ * const exists = await FileSystemService.directoryExists("./src");
+ *
+ * // Get all files in a directory
+ * const result = await FileSystemService.getFilesInDirectory("./src");
+ * ```
  */
 export class FileSystemService {
   private constructor() {}
@@ -116,7 +128,21 @@ export class FileSystemService {
 }
 
 /**
- * プロジェクトファイル発見サービス
+ * Service for discovering project files for CI processing.
+ *
+ * Discovers and categorizes project files including:
+ * - Test files (*_test.ts, *.test.ts)
+ * - TypeScript files for type checking
+ * - Configuration files (deno.json, etc.)
+ *
+ * @example
+ * ```typescript
+ * // Find project root
+ * const rootResult = await ProjectFileDiscovery.findProjectRoot();
+ *
+ * // Discover all project files
+ * const filesResult = await ProjectFileDiscovery.discoverProjectFiles("./src");
+ * ```
  */
 export class ProjectFileDiscovery {
   private constructor() {}

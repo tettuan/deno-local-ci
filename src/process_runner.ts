@@ -86,7 +86,18 @@ class TestOutputAnalyzer {
 }
 
 /**
- * プロセス実行サービス
+ * Service for executing shell commands and processes.
+ *
+ * Provides a type-safe wrapper around Deno.Command with timeout support,
+ * environment variable handling, and structured result types.
+ *
+ * @example
+ * ```typescript
+ * const result = await ProcessRunner.runCommand("deno", ["test", "example.test.ts"]);
+ * if (result.ok && result.data.success) {
+ *   console.log("Tests passed!");
+ * }
+ * ```
  */
 export class ProcessRunner {
   private constructor() {}
@@ -217,7 +228,23 @@ export class ProcessRunner {
 }
 
 /**
- * Deno専用コマンド実行サービス
+ * Specialized service for executing Deno CLI commands.
+ *
+ * Provides type-safe wrappers for common Deno operations:
+ * - Type checking (deno check)
+ * - Testing (deno test)
+ * - Linting (deno lint)
+ * - Formatting (deno fmt)
+ * - JSR publishing (deno publish)
+ *
+ * @example
+ * ```typescript
+ * // Run type check
+ * const result = await DenoCommandRunner.typeCheck(["src/main.ts"]);
+ *
+ * // Run tests
+ * const testResult = await DenoCommandRunner.runTests(["tests/"]);
+ * ```
  */
 export class DenoCommandRunner {
   private constructor() {}
