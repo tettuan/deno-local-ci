@@ -125,6 +125,19 @@ export type ExecutionMode =
   | { kind: "single-file"; stopOnFirstError: boolean; hierarchy: string | null };
 
 // === CI Stage and Error Type Definitions ===
+
+/**
+ * Discriminated union representing different CI pipeline stages.
+ *
+ * Each stage has a specific purpose in the CI pipeline:
+ * - `git-status-check`: Check for uncommitted changes
+ * - `lockfile-init`: Initialize/regenerate the lockfile
+ * - `type-check`: Run TypeScript type checking
+ * - `jsr-check`: Verify JSR compatibility
+ * - `test-execution`: Run test files
+ * - `lint-check`: Run linting
+ * - `format-check`: Check code formatting
+ */
 export type CIStage =
   | { kind: "git-status-check" }
   | { kind: "lockfile-init"; action: "regenerate" }
@@ -139,11 +152,30 @@ export type CIStage =
   | { kind: "lint-check"; files: string[]; hierarchy: string | null }
   | { kind: "format-check"; checkOnly: boolean; hierarchy: string | null };
 
+/**
+ * Result of executing a CI stage.
+ *
+ * - `success`: Stage completed successfully with duration and optional test summary
+ * - `failure`: Stage failed with error message, execution should stop
+ * - `skipped`: Stage was skipped with a reason (e.g., no files to process)
+ */
 export type StageResult =
   | { kind: "success"; stage: CIStage; duration: number; testSummary?: string; outputLog?: string }
   | { kind: "failure"; stage: CIStage; error: string; shouldStop: true; outputLog?: string }
   | { kind: "skipped"; stage: CIStage; reason: string; outputLog?: string };
 
+/**
+ * Classified CI error types for structured error handling.
+ *
+ * Each error variant contains context-specific information for debugging:
+ * - `TypeCheckError`: TypeScript compilation errors
+ * - `TestFailure`: Test execution failures
+ * - `JSRError`: JSR compatibility issues
+ * - `FormatError`: Code formatting violations
+ * - `LintError`: Linting rule violations
+ * - `ConfigurationError`: Invalid configuration
+ * - `FileSystemError`: File system operation failures
+ */
 export type CIError =
   | { kind: "TypeCheckError"; files: string[]; details: string[] }
   | { kind: "TestFailure"; files: string[]; errors: string[] }
@@ -154,11 +186,26 @@ export type CIError =
   | { kind: "FileSystemError"; operation: string; path: string; cause: string };
 
 // === テスト結果・ファイル型定義 ===
+
+/**
+ * Result of executing a single test file.
+ *
+ * - `success`: Test passed with execution duration
+ * - `failure`: Test failed with error message
+ * - `skipped`: Test was skipped with a reason
+ */
 export type TestResult =
   | { kind: "success"; filePath: string; duration: number }
   | { kind: "failure"; filePath: string; error: string }
   | { kind: "skipped"; filePath: string; reason: string };
 
+/**
+ * Classification of file types for CI processing.
+ *
+ * - `test`: Test files (*_test.ts, *.test.ts)
+ * - `typecheck`: TypeScript files for type checking
+ * - `config`: Configuration files (deno.json, etc.)
+ */
 export type TestFileType =
   | { kind: "test"; pattern: "*_test.ts" | "*.test.ts" }
   | { kind: "typecheck"; pattern: "*.ts" | "*.tsx" | "*.d.ts" }
@@ -186,6 +233,15 @@ export interface TestFileInfo {
 }
 
 // === ログ・診断機能 ===
+
+/**
+ * Logging mode configuration for CI output verbosity.
+ *
+ * - `normal`: Standard output with section headers
+ * - `silent`: Only show errors
+ * - `debug`: Verbose output with BreakdownLogger integration
+ * - `error-files-only`: Show only files with errors
+ */
 export type LogMode =
   | { kind: "normal"; showSections: true }
   | { kind: "silent"; errorsOnly: true }
@@ -193,50 +249,96 @@ export type LogMode =
   | { kind: "error-files-only"; implicitSilent: true };
 
 // === テスト統計情報 ===
+
+/**
+ * Statistics from test execution.
+ */
 export type TestStats = {
+  /** Number of test files executed */
   filesRun: number;
+  /** Total number of individual tests run */
   testsRun: number;
+  /** Number of tests that passed */
   testsPassed: number;
+  /** Number of tests that failed */
   testsFailed: number;
 };
 
 // === プロセス実行結果 ===
+
+/**
+ * Result of executing a shell command/process.
+ */
 export type ProcessResult = {
+  /** Whether the process exited successfully (code 0) */
   success: boolean;
+  /** Process exit code */
   code: number;
+  /** Standard output content */
   stdout: string;
+  /** Standard error content */
   stderr: string;
+  /** Execution duration in milliseconds */
   duration: number;
-  testStats?: TestStats; // テスト実行時のみ設定される
+  /** Test statistics (only set for test execution) */
+  testStats?: TestStats;
 };
 
 // === バッチ失敗情報 ===
+
+/**
+ * Information about a failed batch in batch execution mode.
+ */
 export type FailedBatchInfo = {
+  /** Start index of the failed batch */
   startIndex: number;
+  /** End index of the failed batch */
   endIndex: number;
+  /** List of files in the failed batch */
   files: string[];
 };
 
 // === 拡張プロセス実行結果（バッチ失敗情報付き）===
+
+/**
+ * Process result extended with optional failed batch information.
+ */
 export type ProcessResultWithBatch = ProcessResult & {
   failedBatch?: FailedBatchInfo;
 };
 
 // === Result with batch info (for strategy execution functions) ===
+
+/**
+ * Result type extended with optional failed batch information.
+ * Used by strategy execution functions for batch processing.
+ */
 export type ResultWithBatch<T, E> = Result<T, E> & {
   failedBatch?: FailedBatchInfo;
 };
 
 // === CI設定 ===
+
+/**
+ * Configuration options for CI execution.
+ */
 export type CIConfig = {
+  /** Execution mode (all, batch, or single-file) */
   mode?: ExecutionMode;
+  /** Enable fallback to more granular modes on failure */
   fallbackEnabled?: boolean;
+  /** Batch size for batch mode execution */
   batchSize?: number;
+  /** Logging verbosity mode */
   logMode?: LogMode;
+  /** BreakdownLogger configuration for debug mode */
   breakdownLoggerConfig?: BreakdownLoggerEnvConfig;
+  /** Stop execution on first error */
   stopOnFirstError?: boolean;
+  /** Allow dirty working directory for JSR check */
   allowDirty?: boolean;
-  hierarchy?: string | null; // 階層指定：null = プロジェクト全体, string = 指定ディレクトリ
+  /** Hierarchy restriction: null = project-wide, string = specific directory */
+  hierarchy?: string | null;
 };
 
 // === Smart Constructor Classes ===
@@ -383,6 +485,11 @@ const getDefaultMessage = (error: ValidationError): string => {
 };
 
 // === 進捗指標情報 ===
+
+/**
+ * Progress indicator for CI execution tracking.
+ * Provides real-time progress information during CI pipeline execution.
+ */
 export interface ProgressIndicator {
   /** 現在処理済みのファイル数 */
   processedFiles: number;
@@ -441,6 +548,11 @@ export interface EnhancedProgressIndicator {
 }
 
 // === CI実行サマリー統計情報 ===
+
+/**
+ * Summary statistics from CI execution.
+ * Contains aggregated metrics for stages, files, tests, and timing.
+ */
 export interface CISummaryStats {
   /** ステージ統計 */
   stages: {

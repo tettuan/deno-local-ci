@@ -96,7 +96,18 @@ export interface CLIOptions {
 }
 
 /**
- * CLI引数パーサー
+ * Command-line argument parser for CI tool.
+ *
+ * Parses CLI arguments into typed options and builds CI configuration.
+ * Supports subcommands (run, status, retry) and various execution options.
+ *
+ * @example
+ * ```typescript
+ * const result = CLIParser.parseArgs(["--mode", "batch", "--batch-size", "10"]);
+ * if (result.ok) {
+ *   const config = CLIParser.buildCIConfig(result.data);
+ * }
+ * ```
  */
 export class CLIParser {
   private constructor() {}
