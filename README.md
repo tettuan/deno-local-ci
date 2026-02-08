@@ -246,6 +246,7 @@ console.log(`Found ${projectFiles.testFiles.length} test files`);
 | `--filter <pattern>`         | Filter test files by pattern                                   | -                 | `--filter "*integration*"`  |
 | `--cwd <path>`               | Specify working directory                                      | Current directory | `--cwd /path/to/project`    |
 | `--working-directory <path>` | Specify working directory (alias for `--cwd`)                  | Current directory | `--working-directory ./src` |
+| `--use-haiku`                | Pipe CI output to claude haiku for structured JSONL summary    | `false`           | `--use-haiku`               |
 | `--help, -h`                 | Display help message                                           | -                 | `--help`                    |
 | `--version, -v`              | Display version information                                    | -                 | `--version`                 |
 
@@ -276,6 +277,10 @@ deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --
 
 # Debug tests/ directory in single-file mode
 deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci tests/ --mode single-file --log-mode debug --log-key TEST --log-length M
+
+# AI-assisted: pipe CI output to claude haiku for structured JSONL summary
+deno run --allow-read --allow-write --allow-run --allow-env jsr:@aidevtool/ci --use-haiku
+# Output: {"status":"PASS","summary":"All 7 stages passed","error_count":0,"errors":[]}
 ```
 
 ## CI Pipeline Stages
