@@ -35,11 +35,17 @@ git pull origin main
 # Verify clean working directory
 git status
 
+# Version consistency check: deno.json and src/version.ts must match
+grep '"version"' deno.json
+grep 'VERSION' src/version.ts
+
 # Verify CI passes
 deno task test
 deno lint
 deno fmt --check
 ```
+
+**Version consistency check**: `deno.json` の `version` と `src/version.ts` の `VERSION` が一致していることを確認する。不一致の場合はリリース前に修正すること。
 
 ### Step 2: Determine New Version
 

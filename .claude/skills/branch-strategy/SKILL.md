@@ -86,14 +86,39 @@ gh pr create --title "Add parallel execution support" --body "## Summary
 3. **CI required**: Merges blocked until CI passes
 4. **Squash merge preferred**: Keep history clean
 
+## Version Branch Convention
+
+バージョンリリース用ブランチは `feature/vX.Y.Z` の命名を使う。
+
+### ブランチ作成時のバージョン一致ルール
+
+`feature/vX.Y.Z` ブランチでは、ブランチ名のバージョンと以下2ファイルを一致させること：
+
+| ファイル | 対象箇所 |
+|----------|----------|
+| `deno.json` | `"version": "X.Y.Z"` |
+| `src/version.ts` | `export const VERSION = "X.Y.Z";` |
+
+```bash
+# ブランチ作成時にバージョンを確認
+git checkout -b feature/vX.Y.Z
+
+# 3箇所の一致を確認
+git branch --show-current          # feature/vX.Y.Z
+grep '"version"' deno.json         # "version": "X.Y.Z"
+grep 'VERSION' src/version.ts      # VERSION = "X.Y.Z"
+```
+
+**不一致がある場合**: ブランチ内で `deno.json` と `src/version.ts` を更新し、`Bump version to X.Y.Z` でコミットする。
+
 ## Release Process
 
 1. Merge PR to main
-2. Update version in `deno.json`
+2. Update version in `deno.json` and `src/version.ts` (both must match)
 3. Create and push tag:
    ```bash
-   git tag v0.1.9
-   git push origin v0.1.9
+   git tag vX.Y.Z
+   git push origin vX.Y.Z
    ```
 4. JSR publish triggers automatically (or manually via `deno publish`)
 
