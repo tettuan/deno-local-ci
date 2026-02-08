@@ -86,6 +86,108 @@ class TestOutputAnalyzer {
 }
 
 /**
+ * Bundle error paths by directory for compact error output.
+ *
+ * Converts full paths to CWD-relative paths and groups files by directory.
+ *
+ * @param errorOutput - Multi-line error message string
+ * @param cwd - Current working directory for relative path conversion
+ * @returns Bundled error string grouped by directory
+ *
+ * @example
+ * ```
+ * Input:
+ *   /Users/user/project/src/ci_runner.ts:100 error TS2345: ...
+ *   /Users/user/project/src/ci_runner.ts:200 error TS2345: ...
+ *   /Users/user/project/src/logger.ts:50 error TS2345: ...
+ *
+ * Output:
+ *   src/: ci_runner.ts(L100,L200) logger.ts(L50) [TS2345 x3]
+ * ```
+ */
+export function bundleErrorsByDirectory(errorOutput: string, cwd: string): string {
+  const lines = errorOutput.split("\n").filter((line) => line.trim().length > 0);
+
+  // Normalize cwd to always end with /
+  const normalizedCwd = cwd.endsWith("/") ? cwd : cwd + "/";
+
+  // Parse error lines: extract file path, line number, and error code
+  const errorEntries: Array<{ dir: string; file: string; line: number; errorCode: string }> = [];
+  const errorCodeCounts = new Map<string, number>();
+
+  for (const line of lines) {
+    // Match patterns like: /path/to/file.ts:123 error TS2345: ...
+    // or: /path/to/file.ts:123:45 - error TS2345: ...
+    const match = line.match(/^(.+?\.[a-zA-Z]+):(\d+)(?::\d+)?\s.*?(TS\d+|[A-Z][a-z]+Error)/);
+    if (!match) continue;
+
+    let filePath = match[1];
+    const lineNum = parseInt(match[2], 10);
+    const errorCode = match[3];
+
+    // Convert to relative path
+    if (filePath.startsWith(normalizedCwd)) {
+      filePath = filePath.substring(normalizedCwd.length);
+    }
+
+    // Split into directory and file name
+    const lastSlash = filePath.lastIndexOf("/");
+    const dir = lastSlash >= 0 ? filePath.substring(0, lastSlash + 1) : "";
+    const file = lastSlash >= 0 ? filePath.substring(lastSlash + 1) : filePath;
+
+    errorEntries.push({ dir, file, line: lineNum, errorCode });
+
+    // Count error codes
+    errorCodeCounts.set(errorCode, (errorCodeCounts.get(errorCode) || 0) + 1);
+  }
+
+  if (errorEntries.length === 0) {
+    return errorOutput.trim();
+  }
+
+  // Group by directory
+  const dirGroups = new Map<string, Map<string, number[]>>();
+  for (const entry of errorEntries) {
+    if (!dirGroups.has(entry.dir)) {
+      dirGroups.set(entry.dir, new Map());
+    }
+    const fileMap = dirGroups.get(entry.dir) ?? new Map<string, number[]>();
+    if (!fileMap.has(entry.file)) {
+      fileMap.set(entry.file, []);
+    }
+    const lineList = fileMap.get(entry.file) ?? [];
+    lineList.push(entry.line);
+    fileMap.set(entry.file, lineList);
+    dirGroups.set(entry.dir, fileMap);
+  }
+
+  // Build output
+  const outputParts: string[] = [];
+  for (const [dir, fileMap] of dirGroups) {
+    const fileParts: string[] = [];
+    for (const [file, lineNums] of fileMap) {
+      const uniqueLines = [...new Set(lineNums)].sort((a, b) => a - b);
+      const lineStr = uniqueLines.map((l) => `L${l}`).join(",");
+      fileParts.push(`${file}(${lineStr})`);
+    }
+    const dirLabel = dir || "./";
+    outputParts.push(`${dirLabel}: ${fileParts.join(" ")}`);
+  }
+
+  // Add error code summary
+  const totalErrors = errorEntries.length;
+  const codeSummaryParts: string[] = [];
+  for (const [code, count] of errorCodeCounts) {
+    codeSummaryParts.push(`${code} x${count}`);
+  }
+  const codeSummary = codeSummaryParts.length > 0
+    ? ` [${codeSummaryParts.join(", ")}]`
+    : ` [x${totalErrors}]`;
+
+  return outputParts.join(" | ") + codeSummary;
+}
+
+/**
  * Service for executing shell commands and processes.
  *
  * Provides a type-safe wrapper around Deno.Command with timeout support,

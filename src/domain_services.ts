@@ -52,10 +52,17 @@ export class CIPipelineOrchestrator {
     // Stage 1: Git status check (always first to detect uncommitted changes)
     stages.push({ kind: "git-status-check" });
 
-    // Stage 2: Lockfile initialization
+    // Stage 2: Format (auto-fix mode, run early to fix formatting before other checks)
+    stages.push({
+      kind: "format-check",
+      checkOnly: false,
+      hierarchy,
+    });
+
+    // Stage 3: Lockfile initialization
     stages.push({ kind: "lockfile-init", action: "regenerate" });
 
-    // Stage 3: Type check
+    // Stage 4: Type check
     stages.push({
       kind: "type-check",
       files: files.typeCheckFiles,
@@ -63,7 +70,7 @@ export class CIPipelineOrchestrator {
       hierarchy,
     });
 
-    // Stage 4: Test execution
+    // Stage 5: Test execution
     if (files.testFiles.length > 0) {
       const strategy = ExecutionStrategyService.determineStrategy(config);
       if (strategy.ok) {
@@ -76,17 +83,10 @@ export class CIPipelineOrchestrator {
       }
     }
 
-    // Stage 5: Lint check
+    // Stage 6: Lint check
     stages.push({
       kind: "lint-check",
       files: files.allFiles,
-      hierarchy,
-    });
-
-    // Stage 6: Format check
-    stages.push({
-      kind: "format-check",
-      checkOnly: true,
       hierarchy,
     });
 

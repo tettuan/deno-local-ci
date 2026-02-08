@@ -93,6 +93,8 @@ export interface CLIOptions {
   statusOptions?: StatusOptions;
   /** Options for retry subcommand */
   retryOptions?: RetryOptions;
+  /** Enable haiku-style compact prompt output for AI assistants */
+  useHaiku?: boolean;
 }
 
 /**
@@ -259,6 +261,10 @@ export class CLIParser {
               options.workingDirectory = args[++i];
               break;
 
+            case "--use-haiku":
+              options.useHaiku = true;
+              break;
+
             case "--help":
             case "-h":
               options.help = true;
@@ -380,6 +386,7 @@ OPTIONS:
     --hierarchy <PATH>         Target directory hierarchy for CI execution
     --dir <PATH>               Alias for --hierarchy
     --cwd <PATH>               Working directory [default: current directory]
+    --use-haiku                Output compact haiku-style prompt for AI assistants
     --help, -h                 Show this help message
     --version, -v              Show version information
 

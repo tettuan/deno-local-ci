@@ -522,6 +522,93 @@ function buildRetryConfig(
 }
 
 /**
+ * Delegate CI result summarization to haiku via pipe.
+ * Runs CI directly, captures output, pipes to claude -p --model haiku for summarization.
+ */
+async function delegateToHaiku(options: CLIOptions): Promise<void> {
+  // Build CI command args (without --use-haiku)
+  const ciArgs = ["run", "--allow-read", "--allow-write", "--allow-run", "--allow-env", "mod.ts"];
+  if (options.allowDirty) ciArgs.push("--allow-dirty");
+  if (options.hierarchy) ciArgs.push("--hierarchy", options.hierarchy);
+  if (options.mode) ciArgs.push("--mode", options.mode);
+  if (options.batchSize) ciArgs.push("--batch-size", String(options.batchSize));
+
+  // Run CI and capture output
+  const ci = new Deno.Command("deno", {
+    args: ciArgs,
+    stdout: "piped",
+    stderr: "piped",
+  });
+  const ciResult = await ci.output();
+  const ciOutput = new TextDecoder().decode(ciResult.stdout) +
+    new TextDecoder().decode(ciResult.stderr);
+
+  // Pipe CI output to haiku via stdin for structured JSONL summarization
+  const jsonSchema = JSON.stringify({
+    type: "object",
+    properties: {
+      status: { type: "string", enum: ["PASS", "FAIL"] },
+      summary: { type: "string", maxLength: 80 },
+      error_count: { type: "integer" },
+      errors: {
+        type: "array",
+        items: { type: "string" },
+        description: "1-level directory paths with errors, e.g. ['src/', 'tests/error_tests/']",
+      },
+    },
+    required: ["status", "summary", "error_count", "errors"],
+  });
+  const systemPrompt =
+    "CI出力→JSON。summary=1行要約。error_count=エラー総数(成功時0)。errorsは1階層dirパスのみ。ファイル列挙禁止。";
+  const haiku = new Deno.Command("claude", {
+    args: [
+      "-p",
+      "--model",
+      "haiku",
+      "--system-prompt",
+      systemPrompt,
+      "--output-format",
+      "json",
+      "--json-schema",
+      jsonSchema,
+      "--tools",
+      "",
+    ],
+    stdin: "piped",
+    stdout: "piped",
+    stderr: "inherit",
+  });
+  const haikuProcess = haiku.spawn();
+  const writer = haikuProcess.stdin.getWriter();
+  await writer.write(new TextEncoder().encode(ciOutput));
+  await writer.close();
+  const haikuResult = await haikuProcess.output();
+
+  // Extract structured result from claude JSON output and emit as single JSONL line
+  const haikuOutput = new TextDecoder().decode(haikuResult.stdout).trim();
+  try {
+    const messages = JSON.parse(haikuOutput);
+    // Find the StructuredOutput tool_use in the message array
+    let structuredResult = null;
+    for (const msg of Array.isArray(messages) ? messages : [messages]) {
+      const content = msg?.message?.content;
+      if (Array.isArray(content)) {
+        for (const block of content) {
+          if (block.type === "tool_use" && block.name === "StructuredOutput") {
+            structuredResult = block.input;
+          }
+        }
+      }
+    }
+    console.log(JSON.stringify(structuredResult ?? messages));
+  } catch {
+    console.log(haikuOutput);
+  }
+
+  Deno.exit(ciResult.code === 0 ? haikuResult.code : ciResult.code);
+}
+
+/**
  * Handle the default 'run' subcommand - execute CI pipeline
  */
 async function handleRunCommand(options: CLIOptions): Promise<void> {
@@ -535,6 +622,12 @@ async function handleRunCommand(options: CLIOptions): Promise<void> {
   if (options.version) {
     CLIParser.showVersion();
     Deno.exit(0);
+  }
+
+  // When --use-haiku is specified, delegate CI execution to haiku via claude CLI
+  if (options.useHaiku) {
+    await delegateToHaiku(options);
+    return;
   }
 
   // Build CI configuration
@@ -593,34 +686,19 @@ async function handleRunCommand(options: CLIOptions): Promise<void> {
   const runner = runnerResult.data;
   const result = await runner.run();
 
-  // Sub-agent instruction for AI assistants
-  console.log("\n[Agent] Run this CI as a sub-agent with its own isolated context.");
+  const totalStages = result.completedStages.length;
+  const passedStages = result.completedStages.filter((s) => s.kind === "success").length;
+  const durationSec = (result.totalDuration / 1000).toFixed(1);
 
   if (result.success) {
     if (options.logMode !== "silent") {
-      console.log("[OK] CI passed successfully");
-      console.log(`[OK] CI completed successfully in ${result.totalDuration}ms`);
-      console.log(`Completed stages: ${result.completedStages.length}`);
+      console.log(`ALL PASSED ${passedStages}/${totalStages} stages ${durationSec}s`);
     }
   } else {
-    console.error("[FAIL] CI failed");
-    console.error(`[FAIL] CI failed: ${result.errorDetails?.kind || "Unknown error"}`);
+    console.error(`FAILED ${passedStages}/${totalStages} stages ${durationSec}s`);
+  }
 
-    // Show progress information if available
-    if (result.progressState) {
-      const progress = result.progressState;
-      const errorMessage = progress.totalErrorCount
-        ? `Errors: ${progress.totalErrorCount} errors in ${progress.errorFiles} files`
-        : `Error files: ${progress.errorFiles}/${progress.totalFiles}`;
-      console.error(errorMessage);
-
-      if (progress.isFallback && progress.fallbackMessage) {
-        console.error(`Warning: ${progress.fallbackMessage}`);
-      }
-    }
-
-    console.error(`Failed after ${result.totalDuration}ms`);
-    console.error(`Completed stages: ${result.completedStages.length}`);
+  if (!result.success) {
     Deno.exit(1);
   }
 }
