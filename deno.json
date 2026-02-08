@@ -18,6 +18,7 @@
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "@std/path": "jsr:@std/path@^1.1.1",
+    "@std/fs": "jsr:@std/fs@^1.0.0",
     "@tettuan/breakdownlogger": "jsr:@tettuan/breakdownlogger@^1.0.8"
   },
   "exports": {

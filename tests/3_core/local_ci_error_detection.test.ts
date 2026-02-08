@@ -15,9 +15,9 @@
  * Purpose: Test whether local_ci correctly detects errors and fallback processing works
  */
 
-import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
-import { join } from "https://deno.land/std@0.208.0/path/mod.ts";
-import { exists } from "https://deno.land/std@0.208.0/fs/mod.ts";
+import { assertEquals } from "@std/assert";
+import { join } from "@std/path";
+import { exists } from "@std/fs";
 
 const ERROR_PATTERNS = [
   {

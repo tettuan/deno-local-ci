@@ -5,7 +5,7 @@
  * Verification of actual CI execution flow
  */
 
-import { assertEquals, assertExists } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals, assertExists } from "@std/assert";
 import { CIRunner } from "../../src/ci_runner.ts";
 import { CILogger, LogModeFactory } from "../../src/logger.ts";
 import { CLIParser } from "../../src/cli_parser.ts";
