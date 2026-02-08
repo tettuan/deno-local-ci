@@ -40,7 +40,12 @@ import {
   StageInternalFallbackService,
 } from "./domain_services.ts";
 
-import { DenoCommandRunner, extractTestSummaryLine, GitCommandRunner } from "./process_runner.ts";
+import {
+  bundleErrorsByDirectory,
+  DenoCommandRunner,
+  extractTestSummaryLine,
+  GitCommandRunner,
+} from "./process_runner.ts";
 import { ProjectFileDiscovery } from "./file_system.ts";
 import type { CILogger } from "./logger.ts";
 import { createExecutionRecord, HistoryStore } from "./history_store.ts";
@@ -101,6 +106,8 @@ export class CIRunner {
 
   // Track uncommitted changes status
   private hasUncommittedChanges = false;
+  // When true, JSR check runs with --allow-dirty instead of being skipped
+  private jsrDryRunWithDirty = false;
   private uncommittedFiles: {
     staged: string[];
     unstaged: string[];
@@ -590,11 +597,11 @@ export class CIRunner {
     // Stage order matching the new pipeline design
     const stageOrder = [
       "git-status-check",
+      "format-check",
       "lockfile-init",
       "type-check",
       "test-execution",
       "lint-check",
-      "format-check",
       "jsr-check",
     ];
     return stageOrder.indexOf(stage.kind);
@@ -734,20 +741,16 @@ export class CIRunner {
       throw new Error("Invalid stage type for JSR check");
     }
 
-    // Skip JSR check if uncommitted changes are detected
-    if (this.hasUncommittedChanges) {
-      const skippedResult: StageResult = {
-        kind: "skipped",
-        stage,
-        reason: "Uncommitted changes detected - JSR check skipped",
-      };
-      this.logger.logStageComplete(skippedResult);
-      return skippedResult;
+    // When uncommitted changes detected, run JSR check with --allow-dirty flag
+    const allowDirty = this.jsrDryRunWithDirty || stage.allowDirty || this.config.allowDirty;
+
+    if (this.jsrDryRunWithDirty) {
+      this.logger.logInfo("Running JSR dry-run with --allow-dirty (uncommitted changes detected)");
     }
 
     const result = await DenoCommandRunner.jsrCheck({
       dryRun: stage.dryRun,
-      allowDirty: stage.allowDirty || this.config.allowDirty,
+      allowDirty: allowDirty,
       hierarchy: stage.hierarchy,
     });
 
@@ -817,11 +820,18 @@ export class CIRunner {
       // テスト出力からサマリー行を抽出
       const testSummary = extractTestSummaryLine(result.data.stdout + result.data.stderr);
 
+      // Parse test counts for compressed output
+      const testStats = result.data.testStats;
+      const compressedOutput = testStats
+        ? `${testStats.testsPassed} passed`
+        : (testSummary || "OK");
+
       const successResult: StageResult = {
         kind: "success",
         stage,
         duration,
         testSummary,
+        outputLog: compressedOutput,
       };
       this.logger.logStageComplete(successResult);
       return successResult;
@@ -890,11 +900,15 @@ export class CIRunner {
         // If fallback failed, continue to failure handling below
       }
 
+      // Compress failure output: extract failed test file:line "message" with directory bundling
+      const compressedError = this.compressTestFailureOutput(errorOutput);
+
       const failureResult: StageResult = {
         kind: "failure",
         stage,
         error: errorOutput,
         shouldStop: true,
+        outputLog: compressedError,
       };
       this.logger.logStageComplete(failureResult);
       return failureResult;
@@ -1167,6 +1181,7 @@ export class CIRunner {
         kind: "success",
         stage,
         duration,
+        outputLog: "OK",
       };
       this.logger.logStageComplete(successResult);
       return successResult;
@@ -1184,11 +1199,15 @@ export class CIRunner {
         // フォールバックは詳細なエラー特定のみで、結果は常に失敗として扱う
       }
 
+      // Compress error output using directory bundling
+      const compressedError = bundleErrorsByDirectory(errorOutput, this.projectRoot);
+
       const failureResult: StageResult = {
         kind: "failure",
         stage,
-        error: errorOutput,
+        error: compressedError,
         shouldStop: true,
+        outputLog: compressedError,
       };
       this.logger.logStageComplete(failureResult);
       return failureResult;
@@ -1292,8 +1311,9 @@ export class CIRunner {
     const gitStatus = result.data;
 
     if (gitStatus.hasUncommittedChanges) {
-      // Set flag for later use (skip JSR check, show commit prompt at end)
+      // Set flag for later use (JSR dry-run with --allow-dirty, show commit prompt at end)
       this.hasUncommittedChanges = true;
+      this.jsrDryRunWithDirty = true;
       this.uncommittedFiles = {
         staged: gitStatus.stagedFiles,
         unstaged: gitStatus.unstagedFiles,
@@ -1301,7 +1321,7 @@ export class CIRunner {
       };
 
       this.logger.logInfo(
-        "Uncommitted changes detected - will prompt to commit after all checks pass",
+        "Uncommitted changes detected - JSR check will run with --allow-dirty",
       );
     }
 
@@ -1741,6 +1761,37 @@ export class CIRunner {
       case "format-check":
         return "Format Check";
     }
+  }
+
+  /**
+   * Compress test failure output into a compact format.
+   * Extracts failed test file:line "message" and applies directory bundling.
+   */
+  private compressTestFailureOutput(errorOutput: string): string {
+    const lines = errorOutput.split("\n");
+
+    // Extract failed test information from Deno test output
+    // Patterns: "FAILED | ..." or "... FAILED" lines, and "error:" lines with file info
+    const failedLines: string[] = [];
+    for (const line of lines) {
+      const trimmed = line.trim();
+      // Match lines with file:line patterns that indicate failures
+      if (
+        trimmed.includes("FAILED") ||
+        (trimmed.includes("error") && trimmed.match(/\.[a-zA-Z]+:\d+/))
+      ) {
+        failedLines.push(trimmed);
+      }
+    }
+
+    if (failedLines.length === 0) {
+      // Fallback: use directory bundling on the raw error output
+      return bundleErrorsByDirectory(errorOutput, this.projectRoot);
+    }
+
+    // Apply directory bundling to the failed lines
+    const bundled = bundleErrorsByDirectory(failedLines.join("\n"), this.projectRoot);
+    return bundled || errorOutput.substring(0, 200);
   }
 
   /**

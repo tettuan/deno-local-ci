@@ -593,35 +593,24 @@ async function handleRunCommand(options: CLIOptions): Promise<void> {
   const runner = runnerResult.data;
   const result = await runner.run();
 
-  // Sub-agent instruction for AI assistants
-  console.log("\n[Agent] Run this CI as a sub-agent with its own isolated context.");
+  const totalStages = result.completedStages.length;
+  const passedStages = result.completedStages.filter((s) => s.kind === "success").length;
+  const durationSec = (result.totalDuration / 1000).toFixed(1);
 
   if (result.success) {
     if (options.logMode !== "silent") {
-      console.log("[OK] CI passed successfully");
-      console.log(`[OK] CI completed successfully in ${result.totalDuration}ms`);
-      console.log(`Completed stages: ${result.completedStages.length}`);
+      console.log(`ALL PASSED ${passedStages}/${totalStages} stages ${durationSec}s`);
     }
   } else {
-    console.error("[FAIL] CI failed");
-    console.error(`[FAIL] CI failed: ${result.errorDetails?.kind || "Unknown error"}`);
-
-    // Show progress information if available
-    if (result.progressState) {
-      const progress = result.progressState;
-      const errorMessage = progress.totalErrorCount
-        ? `Errors: ${progress.totalErrorCount} errors in ${progress.errorFiles} files`
-        : `Error files: ${progress.errorFiles}/${progress.totalFiles}`;
-      console.error(errorMessage);
-
-      if (progress.isFallback && progress.fallbackMessage) {
-        console.error(`Warning: ${progress.fallbackMessage}`);
-      }
-    }
-
-    console.error(`Failed after ${result.totalDuration}ms`);
-    console.error(`Completed stages: ${result.completedStages.length}`);
+    console.error(`FAILED ${passedStages}/${totalStages} stages ${durationSec}s`);
     Deno.exit(1);
+  }
+
+  if (options.useHaiku) {
+    console.log("--- haiku prompt ---");
+    console.log(
+      'CI実行→最小報告。エラーdir束ね。成功1行。失敗=要約+file:行"msg"',
+    );
   }
 }
 
