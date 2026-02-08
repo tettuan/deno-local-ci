@@ -133,3 +133,14 @@ Deno.test("Full CI Pipeline - configuration validation", async () => {
     }
   }
 });
+
+Deno.test("CLI Integration - parse --use-haiku with other options", () => {
+  const args = ["--use-haiku", "--mode", "batch", "--batch-size", "10"];
+  const parseResult = CLIParser.parseArgs(args);
+  assertEquals(parseResult.ok, true);
+  if (parseResult.ok) {
+    assertEquals(parseResult.data.useHaiku, true);
+    assertEquals(parseResult.data.mode, "batch");
+    assertEquals(parseResult.data.batchSize, 10);
+  }
+});

@@ -221,3 +221,63 @@ Deno.test("Discriminated Union - type safety", () => {
     }
   }
 });
+
+Deno.test("ExecutionStrategy - getCommandArgs with hierarchy", () => {
+  const mode: ExecutionMode = {
+    kind: "all",
+    projectDirectories: [],
+    hierarchy: "src/",
+  };
+  const result = ExecutionStrategy.create(mode, true, "src/");
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    const args = result.data.getCommandArgs(["deno", "test"]);
+    assertEquals(args.includes("src/"), true);
+    assertEquals(args.length, 3);
+    assertEquals(args[0], "deno");
+    assertEquals(args[1], "test");
+    assertEquals(args[2], "src/");
+  }
+});
+
+Deno.test("ExecutionStrategy - getCommandArgs without hierarchy", () => {
+  const mode: ExecutionMode = {
+    kind: "all",
+    projectDirectories: [],
+    hierarchy: null,
+  };
+  const result = ExecutionStrategy.create(mode, true, null);
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    const args = result.data.getCommandArgs(["deno", "test"]);
+    assertEquals(args.length, 2);
+    assertEquals(args[0], "deno");
+    assertEquals(args[1], "test");
+  }
+});
+
+Deno.test("ExecutionStrategy - shouldSkipJSRCheck with hierarchy", () => {
+  const mode: ExecutionMode = {
+    kind: "all",
+    projectDirectories: [],
+    hierarchy: "src/",
+  };
+  const result = ExecutionStrategy.create(mode, true, "src/");
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.data.shouldSkipJSRCheck(), true);
+  }
+});
+
+Deno.test("ExecutionStrategy - shouldSkipJSRCheck without hierarchy", () => {
+  const mode: ExecutionMode = {
+    kind: "all",
+    projectDirectories: [],
+    hierarchy: null,
+  };
+  const result = ExecutionStrategy.create(mode, true, null);
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.data.shouldSkipJSRCheck(), false);
+  }
+});

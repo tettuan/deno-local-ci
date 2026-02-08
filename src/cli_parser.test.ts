@@ -254,3 +254,12 @@ Deno.test("CLIParser - mixed valid and edge case arguments", () => {
     assertEquals(options.stopOnFirstError, false);
   }
 });
+
+Deno.test("CLIParser - parse --use-haiku flag", () => {
+  const args = ["--use-haiku"];
+  const result = CLIParser.parseArgs(args);
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.data.useHaiku, true);
+  }
+});

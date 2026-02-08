@@ -5,7 +5,7 @@
  * Testing execution strategy determination, fallback processing, and error classification
  */
 
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertExists } from "@std/assert";
 import {
   CIPipelineOrchestrator,
   ErrorClassificationService,
@@ -200,28 +200,36 @@ Deno.test("ErrorClassificationService - classify JSR error", () => {
   assertEquals(error.kind, "JSRError");
 });
 
-// TODO(@tettuan): Implement STAGE_ORDER and getNextStage in CIPipelineOrchestrator
-/*
-Deno.test("CIPipelineOrchestrator - stage order", () => {
-  const expectedOrder = [
-    "type-check",
-    "jsr-check",
-    "test-execution",
-    "lint-check",
-    "format-check",
-  ];
+Deno.test("CIPipelineOrchestrator - stage order matches v0.2.0 pipeline", () => {
+  const config: CIConfig = {};
+  const files = {
+    testFiles: ["test.ts"],
+    typeCheckFiles: ["mod.ts"],
+    allFiles: ["mod.ts", "test.ts"],
+  };
+  const stages = CIPipelineOrchestrator.getStages(config, files);
 
-  assertEquals(CIPipelineOrchestrator.STAGE_ORDER, expectedOrder);
+  // v0.2.0 pipeline order: git-status -> format -> lockfile -> type-check -> test -> lint -> jsr
+  assertEquals(stages[0].kind, "git-status-check");
+  assertEquals(stages[1].kind, "format-check");
+  assertEquals(stages[2].kind, "lockfile-init");
+  assertEquals(stages[3].kind, "type-check");
+  assertEquals(stages[4].kind, "test-execution");
+  assertEquals(stages[5].kind, "lint-check");
+  assertEquals(stages[6].kind, "jsr-check");
+  assertEquals(stages.length, 7);
 });
 
-Deno.test("CIPipelineOrchestrator - get next stage", () => {
-  assertEquals(CIPipelineOrchestrator.getNextStage("type-check"), "jsr-check");
-  assertEquals(CIPipelineOrchestrator.getNextStage("jsr-check"), "test-execution");
-  assertEquals(CIPipelineOrchestrator.getNextStage("test-execution"), "lint-check");
-  assertEquals(CIPipelineOrchestrator.getNextStage("lint-check"), "format-check");
-  assertEquals(CIPipelineOrchestrator.getNextStage("format-check"), null);
+Deno.test("CIPipelineOrchestrator - format stage uses auto-fix mode", () => {
+  const config: CIConfig = {};
+  const files = { testFiles: [], typeCheckFiles: [], allFiles: [] };
+  const stages = CIPipelineOrchestrator.getStages(config, files);
+  const formatStage = stages.find((s) => s.kind === "format-check");
+  assertExists(formatStage);
+  if (formatStage && formatStage.kind === "format-check") {
+    assertEquals(formatStage.checkOnly, false);
+  }
 });
-*/
 
 Deno.test("CIPipelineOrchestrator - should stop execution on failure", () => {
   const config: CIConfig = { stopOnFirstError: true };

@@ -316,3 +316,99 @@ Deno.test("CILogger - BreakdownLogger integration", () => {
     }
   }
 });
+
+Deno.test("CILogger - silent mode suppresses logError", () => {
+  const mode = LogModeFactory.silent();
+  const loggerResult = CILogger.create(mode);
+  assertEquals(loggerResult.ok, true);
+  if (loggerResult.ok) {
+    const logger = loggerResult.data;
+    const originalLog = console.log;
+    const originalError = console.error;
+    let logCalled = false;
+    console.log = () => {
+      logCalled = true;
+    };
+    console.error = () => {
+      logCalled = true;
+    };
+    try {
+      logger.logError("test error", new Error("test"));
+      assertEquals(logCalled, false);
+    } finally {
+      console.log = originalLog;
+      console.error = originalError;
+    }
+  }
+});
+
+Deno.test("CILogger - silent mode suppresses logFallback", () => {
+  const mode = LogModeFactory.silent();
+  const loggerResult = CILogger.create(mode);
+  assertEquals(loggerResult.ok, true);
+  if (loggerResult.ok) {
+    const logger = loggerResult.data;
+    const originalLog = console.log;
+    const originalError = console.error;
+    let logCalled = false;
+    console.log = () => {
+      logCalled = true;
+    };
+    console.error = () => {
+      logCalled = true;
+    };
+    try {
+      logger.logFallback("all", "batch", "test fallback reason");
+      assertEquals(logCalled, false);
+    } finally {
+      console.log = originalLog;
+      console.error = originalError;
+    }
+  }
+});
+
+Deno.test("CILogger - silent mode suppresses logSummary and printSummary", () => {
+  const mode = LogModeFactory.silent();
+  const loggerResult = CILogger.create(mode);
+  assertEquals(loggerResult.ok, true);
+  if (loggerResult.ok) {
+    const logger = loggerResult.data;
+    const originalLog = console.log;
+    const originalError = console.error;
+    let logCalled = false;
+    console.log = () => {
+      logCalled = true;
+    };
+    console.error = () => {
+      logCalled = true;
+    };
+    try {
+      logger.logSummary(5, 3, 2, 45000);
+      assertEquals(logCalled, false);
+
+      const stats = {
+        stages: { total: 5, successful: 3, failed: 2, skipped: 0 },
+        files: {
+          totalChecked: 10,
+          testFiles: 5,
+          typeCheckFiles: 5,
+          lintFiles: 5,
+          formatFiles: 5,
+          fileInfoLines: ["src/file1.ts"],
+        },
+        tests: { totalTests: 10, passedTests: 8, failedTests: 2, skippedTests: 0 },
+        timing: {
+          totalDuration: 45000,
+          averageStageTime: 9000,
+          longestStage: "Test Execution",
+          longestStageDuration: 15000,
+        },
+      };
+      logger.printSummary(stats);
+      assertEquals(logCalled, false);
+    } finally {
+      console.log = originalLog;
+      console.error = originalError;
+    }
+  }
+});
