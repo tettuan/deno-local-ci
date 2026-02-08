@@ -232,7 +232,7 @@ export class CIRunner {
         const stageResult = await this.executeStageWithFallback(stage);
         completedStages.push(stageResult);
 
-        this.logger.logStageComplete(stageResult);
+        // logStageComplete is called inside each executeXxx method, not here
 
         // Check if execution should stop per orchestrator rules
         if (CIPipelineOrchestrator.shouldStopExecution(stageResult, this.config)) {
