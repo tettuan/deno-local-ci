@@ -209,8 +209,10 @@ export class CILogger {
       : JSON.stringify(error);
 
     switch (this.mode.kind) {
-      case "normal":
       case "silent":
+        // Suppress error details in silent mode (final summary in mod.ts handles reporting)
+        break;
+      case "normal":
         console.error(`❌ ${message}`);
         if (errorStr) {
           console.error(`   ${errorStr}`);
@@ -371,8 +373,10 @@ export class CILogger {
         }
         break;
       case "silent":
+        // Suppress fallback logs in silent mode
+        return;
       case "error-files-only":
-        // Log fallbacks even in silent mode as they're important
+        // Log fallbacks in error-files-only mode as they're important
         console.log(message);
         break;
     }
@@ -466,6 +470,10 @@ export class CILogger {
    * Print summary statistics per architecture design.
    */
   printSummary(stats: CISummaryStats): void {
+    if (this.mode.kind === "silent") {
+      return;
+    }
+
     if (this.mode.kind === "error-files-only") {
       // Only show error file information
       if (stats.files.fileInfoLines.length > 0) {
@@ -528,6 +536,10 @@ export class CILogger {
     totalDuration: number,
     stats?: CISummaryStats,
   ): void {
+    if (this.mode.kind === "silent") {
+      return;
+    }
+
     if (stats) {
       this.printSummary(stats);
     } else {
@@ -639,8 +651,10 @@ export class CILogger {
     const prefix = stageTag ? `${stageTag} ` : "";
 
     switch (this.mode.kind) {
-      case "normal":
       case "silent":
+        // Suppress failure details in silent mode (final summary in mod.ts handles reporting)
+        break;
+      case "normal":
         console.error(`${prefix}❌ ${stageName} failed`);
         console.error(`   ${error}`);
         break;

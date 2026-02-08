@@ -638,8 +638,6 @@ export class CIRunner {
     // Clear previous failed batch info at stage start
     this.lastFailedBatchInfo = undefined;
 
-    this.logger.logStageStart(stage);
-
     try {
       switch (stage.kind) {
         case "git-status-check":
@@ -1036,18 +1034,20 @@ export class CIRunner {
             const errorDetails = result.ok ? result.data.stderr : result.error.message;
             failedFiles.push({ file, error: errorDetails });
 
-            // 失敗時のみDenoの実際のテスト出力をそのまま表示
+            // 失敗時のみDenoの実際のテスト出力をそのまま表示（debugモード時のみ）
             this.logger.logInfo(`[SINGLE-FILE] Test failed for ${file}:`);
-            if (result.ok) {
-              // stdoutとstderrの両方を表示（Denoのテスト出力はstderrに含まれることが多い）
-              if (result.data.stdout.trim()) {
-                console.log(result.data.stdout);
+            if (this.config.logMode?.kind === "debug") {
+              if (result.ok) {
+                // stdoutとstderrの両方を表示（Denoのテスト出力はstderrに含まれることが多い）
+                if (result.data.stdout.trim()) {
+                  console.log(result.data.stdout);
+                }
+                if (result.data.stderr.trim()) {
+                  console.log(result.data.stderr);
+                }
+              } else {
+                console.log(result.error.message);
               }
-              if (result.data.stderr.trim()) {
-                console.log(result.data.stderr);
-              }
-            } else {
-              console.log(result.error.message);
             }
 
             if (strategy.mode.stopOnFirstError) {
@@ -1140,7 +1140,9 @@ export class CIRunner {
       targetFiles: targetFiles,
       reason: "Test execution failed",
     });
-    this.logger.logError("Original test error", originalError);
+    if (this.config.logMode?.kind !== "silent") {
+      this.logger.logError("Original test error", originalError);
+    }
 
     // フォールバック時の進捗指標更新
     this.updateProgress(
@@ -1445,7 +1447,9 @@ export class CIRunner {
       targetFiles: targetFiles,
       reason: "Type check failed",
     });
-    this.logger.logError("Original type check error", originalError);
+    if (this.config.logMode?.kind !== "silent") {
+      this.logger.logError("Original type check error", originalError);
+    }
 
     // フォールバック時の進捗指標更新
     this.updateProgress(
@@ -1539,7 +1543,9 @@ export class CIRunner {
       targetFiles: targetFiles,
       reason: "Lint check failed",
     });
-    this.logger.logError("Original lint error", originalError);
+    if (this.config.logMode?.kind !== "silent") {
+      this.logger.logError("Original lint error", originalError);
+    }
 
     return await this.executeLintWithStrategy(fallbackStrategy, targetFiles);
   }
@@ -1606,7 +1612,9 @@ export class CIRunner {
       targetFiles: files,
       reason: "Format check failed",
     });
-    this.logger.logError("Original format error", originalError);
+    if (this.config.logMode?.kind !== "silent") {
+      this.logger.logError("Original format error", originalError);
+    }
 
     return await this.executeFormatWithStrategy(fallbackStrategy, files, options);
   }
@@ -1862,6 +1870,11 @@ export class CIRunner {
    * Display commit prompt message when uncommitted changes are detected
    */
   private logCommitPrompt(): void {
+    // Suppress commit prompt in silent mode
+    if (this.config.logMode?.kind === "silent") {
+      return;
+    }
+
     const allFiles = [
       ...this.uncommittedFiles.staged,
       ...this.uncommittedFiles.unstaged,

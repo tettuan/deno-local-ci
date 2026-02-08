@@ -522,6 +522,53 @@ function buildRetryConfig(
 }
 
 /**
+ * Delegate CI result summarization to haiku via pipe.
+ * Runs CI directly, captures output, pipes to claude -p --model haiku for summarization.
+ */
+async function delegateToHaiku(options: CLIOptions): Promise<void> {
+  // Build CI command args (without --use-haiku)
+  const ciArgs = ["run", "--allow-read", "--allow-write", "--allow-run", "--allow-env", "mod.ts"];
+  if (options.allowDirty) ciArgs.push("--allow-dirty");
+  if (options.hierarchy) ciArgs.push("--hierarchy", options.hierarchy);
+  if (options.mode) ciArgs.push("--mode", options.mode);
+  if (options.batchSize) ciArgs.push("--batch-size", String(options.batchSize));
+
+  // Run CI and capture output
+  const ci = new Deno.Command("deno", {
+    args: ciArgs,
+    stdout: "piped",
+    stderr: "piped",
+  });
+  const ciResult = await ci.output();
+  const ciOutput = new TextDecoder().decode(ciResult.stdout) +
+    new TextDecoder().decode(ciResult.stderr);
+
+  // Pipe CI output to haiku via stdin for summarization
+  const systemPrompt =
+    'CI出力を以下の形式のみで返せ。他の文章禁止。\n成功: OK <stage> <time>\n失敗: FAIL <stage> | dir/: file(L行) "msg"\n最後に1行要約';
+  const haiku = new Deno.Command("claude", {
+    args: [
+      "-p",
+      "--model",
+      "haiku",
+      "--system-prompt",
+      systemPrompt,
+      "--tools",
+      "",
+    ],
+    stdin: "piped",
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  const haikuProcess = haiku.spawn();
+  const writer = haikuProcess.stdin.getWriter();
+  await writer.write(new TextEncoder().encode(ciOutput));
+  await writer.close();
+  const haikuResult = await haikuProcess.output();
+  Deno.exit(ciResult.code === 0 ? haikuResult.code : ciResult.code);
+}
+
+/**
  * Handle the default 'run' subcommand - execute CI pipeline
  */
 async function handleRunCommand(options: CLIOptions): Promise<void> {
@@ -535,6 +582,12 @@ async function handleRunCommand(options: CLIOptions): Promise<void> {
   if (options.version) {
     CLIParser.showVersion();
     Deno.exit(0);
+  }
+
+  // When --use-haiku is specified, delegate CI execution to haiku via claude CLI
+  if (options.useHaiku) {
+    await delegateToHaiku(options);
+    return;
   }
 
   // Build CI configuration
@@ -603,14 +656,10 @@ async function handleRunCommand(options: CLIOptions): Promise<void> {
     }
   } else {
     console.error(`FAILED ${passedStages}/${totalStages} stages ${durationSec}s`);
-    Deno.exit(1);
   }
 
-  if (options.useHaiku) {
-    console.log("--- haiku prompt ---");
-    console.log(
-      'CI実行→最小報告。エラーdir束ね。成功1行。失敗=要約+file:行"msg"',
-    );
+  if (!result.success) {
+    Deno.exit(1);
   }
 }
 
