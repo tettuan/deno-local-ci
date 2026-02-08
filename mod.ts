@@ -543,9 +543,23 @@ async function delegateToHaiku(options: CLIOptions): Promise<void> {
   const ciOutput = new TextDecoder().decode(ciResult.stdout) +
     new TextDecoder().decode(ciResult.stderr);
 
-  // Pipe CI output to haiku via stdin for summarization
+  // Pipe CI output to haiku via stdin for structured JSONL summarization
+  const jsonSchema = JSON.stringify({
+    type: "object",
+    properties: {
+      status: { type: "string", enum: ["PASS", "FAIL"] },
+      summary: { type: "string", maxLength: 80 },
+      error_count: { type: "integer" },
+      errors: {
+        type: "array",
+        items: { type: "string" },
+        description: "1-level directory paths with errors, e.g. ['src/', 'tests/error_tests/']",
+      },
+    },
+    required: ["status", "summary", "error_count", "errors"],
+  });
   const systemPrompt =
-    'CI出力を以下の形式のみで返せ。他の文章禁止。\n成功: OK <stage> <time>\n失敗: FAIL <stage> | dir/: file(L行) "msg"\n最後に1行要約';
+    "CI出力→JSON。summary=1行要約。error_count=エラー総数(成功時0)。errorsは1階層dirパスのみ。ファイル列挙禁止。";
   const haiku = new Deno.Command("claude", {
     args: [
       "-p",
@@ -553,11 +567,15 @@ async function delegateToHaiku(options: CLIOptions): Promise<void> {
       "haiku",
       "--system-prompt",
       systemPrompt,
+      "--output-format",
+      "json",
+      "--json-schema",
+      jsonSchema,
       "--tools",
       "",
     ],
     stdin: "piped",
-    stdout: "inherit",
+    stdout: "piped",
     stderr: "inherit",
   });
   const haikuProcess = haiku.spawn();
@@ -565,6 +583,28 @@ async function delegateToHaiku(options: CLIOptions): Promise<void> {
   await writer.write(new TextEncoder().encode(ciOutput));
   await writer.close();
   const haikuResult = await haikuProcess.output();
+
+  // Extract structured result from claude JSON output and emit as single JSONL line
+  const haikuOutput = new TextDecoder().decode(haikuResult.stdout).trim();
+  try {
+    const messages = JSON.parse(haikuOutput);
+    // Find the StructuredOutput tool_use in the message array
+    let structuredResult = null;
+    for (const msg of Array.isArray(messages) ? messages : [messages]) {
+      const content = msg?.message?.content;
+      if (Array.isArray(content)) {
+        for (const block of content) {
+          if (block.type === "tool_use" && block.name === "StructuredOutput") {
+            structuredResult = block.input;
+          }
+        }
+      }
+    }
+    console.log(JSON.stringify(structuredResult ?? messages));
+  } catch {
+    console.log(haikuOutput);
+  }
+
   Deno.exit(ciResult.code === 0 ? haikuResult.code : ciResult.code);
 }
 
